@@ -1,24 +1,26 @@
-import bpy
-import re
 import json
+import re
 import tempfile
 import time
 import uuid
-from typing import Any
+from functools import partial
 from pathlib import Path
+from typing import Any
+
+import bpy
 from bpy.types import Context, Event
 from mathutils import Vector
-from functools import partial
-from .translations import ctxt
-from .prop import Prop
-from .utils import _T, logger, FSWatcher, read_json
-from .timer import Timer, Worker, WorkerFunc
-from .SDNode import TaskManager
-from .SDNode.history import History
-from .SDNode.tree import InvalidNodeType, CFNodeTree, TREE_TYPE, rtnode_rereg
-from .SDNode.utils import get_default_tree, WindowLogger
+
 from .datas import IMG_SUFFIX
 from .preference import get_pref
+from .prop import Prop
+from .SDNode import TaskManager
+from .SDNode.history import History
+from .SDNode.tree import TREE_TYPE, CFNodeTree, InvalidNodeType, rtnode_rereg
+from .SDNode.utils import WindowLogger, get_default_tree
+from .timer import Timer, Worker, WorkerFunc
+from .translations import ctxt
+from .utils import _T, FSWatcher, logger, read_json
 
 
 def find_nodes_by_idname(tree, idname, find_nodes=None):
@@ -68,8 +70,9 @@ class Ops(bpy.types.Operator):
     is_advanced_enable = False
 
     @classmethod
-    def description(cls, context: bpy.types.Context,
-                    properties: bpy.types.OperatorProperties) -> str:
+    def description(
+        cls, context: bpy.types.Context, properties: bpy.types.OperatorProperties
+    ) -> str:
         desc = "SD Node"
         action = properties.get("action", "")
         if action == "PresetFromBookmark":
@@ -91,27 +94,53 @@ class Ops(bpy.types.Operator):
     def draw(self, context):
         layout = self.layout
         if self.action == "Submit" and not TaskManager.is_launched():
-            layout.label(text=_T("ComfyUI not running, run?"), icon="INFO", text_ctxt=ctxt)
+            layout.label(
+                text=_T("ComfyUI not running, run?"), icon="INFO", text_ctxt=ctxt
+            )
         if self.action == "Save":
-            if (Path(bpy.context.scene.sdn.presets_dir) / f"{self.save_name}.json").exists():
+            if (
+                Path(bpy.context.scene.sdn.presets_dir) / f"{self.save_name}.json"
+            ).exists():
                 layout.alert = True
-                layout.label(text=f"{_T('Preset')}<{self.save_name}>{_T('exists, Click Ok to Overwrite!')}", icon="ERROR", text_ctxt=ctxt)
-                layout.label(text="Click Outside to Cancel!", icon="ERROR", text_ctxt=ctxt)
+                layout.label(
+                    text=f"{_T('Preset')}<{self.save_name}>{_T('exists, Click Ok to Overwrite!')}",
+                    icon="ERROR",
+                    text_ctxt=ctxt,
+                )
+                layout.label(
+                    text="Click Outside to Cancel!", icon="ERROR", text_ctxt=ctxt
+                )
             layout.prop(self, "save_name", text_ctxt=ctxt)
         if self.action == "SaveGroup":
-            if (Path(bpy.context.scene.sdn.groups_dir) / f"{self.save_name}.json").exists():
+            if (
+                Path(bpy.context.scene.sdn.groups_dir) / f"{self.save_name}.json"
+            ).exists():
                 layout.alert = True
-                layout.label(text=f"{_T('Preset')}<{self.save_name}>{_T('exists, Click Ok to Overwrite!')}", icon="ERROR", text_ctxt=ctxt)
-                layout.label(text="Click Outside to Cancel!", icon="ERROR", text_ctxt=ctxt)
+                layout.label(
+                    text=f"{_T('Preset')}<{self.save_name}>{_T('exists, Click Ok to Overwrite!')}",
+                    icon="ERROR",
+                    text_ctxt=ctxt,
+                )
+                layout.label(
+                    text="Click Outside to Cancel!", icon="ERROR", text_ctxt=ctxt
+                )
             layout.prop(self, "save_name", text_ctxt=ctxt)
 
         if self.action == "Del":
             layout.alert = True
-            layout.label(text=f"{_T('Preset')}<{Path(bpy.context.scene.sdn.presets).stem}>{_T('will be removed?')}", icon="ERROR", text_ctxt=ctxt)
+            layout.label(
+                text=f"{_T('Preset')}<{Path(bpy.context.scene.sdn.presets).stem}>{_T('will be removed?')}",
+                icon="ERROR",
+                text_ctxt=ctxt,
+            )
             layout.label(text="Click Outside to Cancel!", icon="ERROR", text_ctxt=ctxt)
         if self.action == "DelGroup":
             layout.alert = True
-            layout.label(text=f"{_T('Preset')}<{Path(bpy.context.scene.sdn.groups).stem}>{_T('will be removed?')}", icon="ERROR", text_ctxt=ctxt)
+            layout.label(
+                text=f"{_T('Preset')}<{Path(bpy.context.scene.sdn.groups).stem}>{_T('will be removed?')}",
+                icon="ERROR",
+                text_ctxt=ctxt,
+            )
             layout.label(text="Click Outside to Cancel!", icon="ERROR", text_ctxt=ctxt)
         if self.action == "PresetFromBookmark":
             layout.label(text="Click Folder Icon to Select Bookmark:", text_ctxt=ctxt)
@@ -138,7 +167,13 @@ class Ops(bpy.types.Operator):
                 self.report({"ERROR"}, _T("Preset Not Selected!"))
                 return {"FINISHED"}
 
-        if self.action in {"Save", "SaveGroup", "Del", "DelGroup", "PresetFromBookmark"}:
+        if self.action in {
+            "Save",
+            "SaveGroup",
+            "Del",
+            "DelGroup",
+            "PresetFromBookmark",
+        }:
             return wm.invoke_props_dialog(self, width=200)
         return self.execute(context)
 
@@ -167,7 +202,9 @@ class Ops(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def find_frames_nodes(self, tree):
-        nodes = [n for n in find_nodes_by_idname(tree, "输入图像") if n.mode == "序列图"]
+        nodes = [
+            n for n in find_nodes_by_idname(tree, "输入图像") if n.mode == "序列图"
+        ]
         return nodes
 
     def find_mat_image_nodes(self, tree):
@@ -215,15 +252,21 @@ class Ops(bpy.types.Operator):
                     except BaseException:
                         ...
                 return frames_map
+
             node_frames = {}
             old_cfg = {}
             for fnode in frames_nodes:
                 frames_dir = fnode.frames_dir
                 if not frames_dir:
-                    self.report({"ERROR"}, _T("Node<{}>Directory is Empty!").format(fnode.name))
+                    self.report(
+                        {"ERROR"}, _T("Node<{}>Directory is Empty!").format(fnode.name)
+                    )
                     return {"FINISHED"}
                 if not Path(frames_dir).exists():
-                    self.report({"ERROR"}, _T("Node<{}>Directory Not Exists!").format(fnode.name))
+                    self.report(
+                        {"ERROR"},
+                        _T("Node<{}>Directory Not Exists!").format(fnode.name),
+                    )
                     return {"FINISHED"}
                 node_frames[fnode] = find_frames(frames_dir)
                 old_cfg[fnode] = {}
@@ -237,7 +280,9 @@ class Ops(bpy.types.Operator):
                 pre_img_map = {pnode: pframes[frame]}
                 for fnode, node_frame in node_frames.items():
                     if not (fpath := node_frame.get(frame, "")):
-                        error_info = _T("Frame <{}> Not Found in <{}> Node Path!").format(frame, fnode.name)
+                        error_info = _T(
+                            "Frame <{}> Not Found in <{}> Node Path!"
+                        ).format(frame, fnode.name)
                         # self.report({"ERROR"}, error_info)
                         logger.error(error_info)
                         break
@@ -254,13 +299,17 @@ class Ops(bpy.types.Operator):
                                 fnode.image = fpath
                             except Exception:
                                 ...
-                    TaskManager.push_task(tree.get_task(), tree=tree, pre=partial(pre, pre_img_map))
+
+                    TaskManager.push_task(
+                        tree.get_task(), tree=tree, pre=partial(pre, pre_img_map)
+                    )
             # restore config
             for fnode, cfg in old_cfg.items():
                 setattr(fnode, "mode", cfg["mode"])
                 setattr(fnode, "image", cfg["image"])
             return {"FINISHED"}
         elif mat_image_node := self.find_mat_image_nodes(tree):
+
             def recursive_node_parent(node, find_nodes=None):
                 # 查找 node 相连的所有父级节点
                 if find_nodes is None:
@@ -287,6 +336,7 @@ class Ops(bpy.types.Operator):
                         continue
                     images.append(img_node.image)
                 return images
+
             save_nodes = find_nodes_by_idname(tree, "存储")
             images = []
             query_objs = []
@@ -338,9 +388,11 @@ class Ops(bpy.types.Operator):
                 sf = bpy.context.scene.frame_start
                 ef = bpy.context.scene.frame_end
                 for cf in range(sf, ef + 1):
+
                     @Timer.wait_run
                     def pre(cf):
                         bpy.context.scene.frame_set(cf)
+
                     pre = partial(pre, cf)
                     TaskManager.push_task(tree.get_task, pre, tree=tree)
             elif bpy.context.scene.sdn.frame_mode == "Batch":
@@ -369,7 +421,11 @@ class Ops(bpy.types.Operator):
 
     def update_nodes_pos(self, event):
         for n in self.select_nodes:
-            n.location = self.init_node_pos[n] + bpy.context.space_data.cursor_location - self.init_pos
+            n.location = (
+                self.init_node_pos[n]
+                + bpy.context.space_data.cursor_location
+                - self.init_pos
+            )
 
     def Launch(self):
         if TaskManager.is_launched():
@@ -503,6 +559,7 @@ class Ops(bpy.types.Operator):
         try:
             data = bpy.context.window_manager.clipboard
             from .utils import WebUIToComfyUI
+
             web_parser = WebUIToComfyUI(data)
             if web_parser.is_webui_format():
                 web_parser.parse(data)
@@ -551,7 +608,7 @@ class Ops_Mask(bpy.types.Operator):
                 brush.blend = "ERASE_ALPHA"
                 brush.color = 1, 1, 1
                 brush.strength = 1
-                brush.curve_preset = 'CONSTANT'
+                brush.curve_preset = "CONSTANT"
                 context.tool_settings.unified_paint_settings.size = 50
 
                 return {"FINISHED"}
@@ -650,7 +707,10 @@ class Copy_Tree(bpy.types.Operator):
         def draw(pm: bpy.types.UIPopupMenu, context):
             layout = pm.layout
             layout.label(text=_T("Tree Copied to ClipBoard"))
-        bpy.context.window_manager.popup_menu(draw, title=_T("Tree Copied to ClipBoard"), icon="INFO")
+
+        bpy.context.window_manager.popup_menu(
+            draw, title=_T("Tree Copied to ClipBoard"), icon="INFO"
+        )
         return {"FINISHED"}
 
 
@@ -674,6 +734,7 @@ class Load_Batch(bpy.types.Operator):
 
     def execute(self, context):
         import csv
+
         # 批量任务格式
         # 任务索引, 节点名.参数名, 参数值, 节点名.参数名, 参数值, ...
         csv_path = Path(self.filepath)
@@ -705,11 +766,13 @@ class Load_Batch(bpy.types.Operator):
             if set(pairs) == {""}:
                 continue
             for i in range(len(pairs) // 2):
-                n_dot_pname, pvalue = pairs[i * 2: i * 2 + 2]
+                n_dot_pname, pvalue = pairs[i * 2 : i * 2 + 2]
                 if not n_dot_pname or not pvalue:
                     continue
                 # nodes["nname"].pname
-                nname, pname = re.match(r"nodes\[\"(.+)\"\]\.(.+)", n_dot_pname).groups()
+                nname, pname = re.match(
+                    r"nodes\[\"(.+)\"\]\.(.+)", n_dot_pname
+                ).groups()
                 node = tree.nodes.get(nname)
                 if not node or not node.get_meta(pname):
                     continue
@@ -737,7 +800,7 @@ class Fetch_Node_Status(bpy.types.Operator):
         t1 = time.time()
         rtnode_rereg()
         t2 = time.time()
-        logger.info(_T("RegNode Time:") + f" {t2-t1:.2f}s")
+        logger.info(_T("RegNode Time:") + f" {t2 - t1:.2f}s")
         CFNodeTree.refresh_current_tree()
         return {"FINISHED"}
 
@@ -751,7 +814,11 @@ class NodeSearch(bpy.types.Operator):
     def node_items(self, context):
         from .SDNode.tree import NodeBase
         from .utils import _T2
-        return [(sb.class_type, _T2(sb.class_type), "") for sb in NodeBase.__subclasses__()]
+
+        return [
+            (sb.class_type, _T2(sb.class_type), "") for sb in NodeBase.__subclasses__()
+        ]
+
     item: bpy.props.EnumProperty(items=node_items)
 
     def invoke(self, context, event):
@@ -760,12 +827,12 @@ class NodeSearch(bpy.types.Operator):
 
     def execute(self, context):
         if not get_default_tree():
-            self.report({'ERROR'}, _T("No NodeTree Found"))
+            self.report({"ERROR"}, _T("No NodeTree Found"))
             return {"FINISHED"}
         try:
             bpy.ops.node.add_node(use_transform=True, settings=[], type=self.item)
         except BaseException:
-            self.report({'WARNING'}, f"未定义的节点 > {self.item}")
+            self.report({"WARNING"}, f"未定义的节点 > {self.item}")
         try:
             bpy.ops.node.translate_attach("INVOKE_DEFAULT")
         except RuntimeError:
@@ -828,7 +895,10 @@ class Sync_Stencil_Image(bpy.types.Operator):
         if context.area.type != "VIEW_3D":
             return {"PASS_THROUGH"}
         # 鼠标不在当前viewport则返回
-        in_area = context.area.x + context.area.width > event.mouse_x > context.area.x and context.area.y + context.area.height > event.mouse_y > context.area.y
+        in_area = (
+            context.area.x + context.area.width > event.mouse_x > context.area.x
+            and context.area.y + context.area.height > event.mouse_y > context.area.y
+        )
         if not in_area:
             return {"PASS_THROUGH"}
 
@@ -838,7 +908,7 @@ class Sync_Stencil_Image(bpy.types.Operator):
         area = context.area
         # zoom to fac powf((float(M_SQRT2) + camzoom / 50.0f), 2.0f) / 4.0f;
         # max(area.width, area.height) * fac
-        fac = (2**0.5 + rv3d.view_camera_zoom / 50)**2 / 4
+        fac = (2**0.5 + rv3d.view_camera_zoom / 50) ** 2 / 4
         length = max(area.width, area.height) * fac
 
         settings = UnifiedPaintPanel.paint_settings(context)
@@ -855,7 +925,7 @@ class Sync_Stencil_Image(bpy.types.Operator):
             coffh = coffy * height
             hwidth = width / 2
             hheight = height / 2
-            fac = (2**0.5 + rv3d.view_camera_zoom / 50)**2 / 4
+            fac = (2**0.5 + rv3d.view_camera_zoom / 50) ** 2 / 4
             brush.stencil_pos = (hwidth - coffw, hheight - offset_top.y - coffh)
         else:
             rv3d.view_camera_offset = (0, 0)
@@ -881,7 +951,11 @@ def menu_sync_stencil_image(self: bpy.types.Menu, context: bpy.types.Context):
     if context.area in Sync_Stencil_Image.areas:
         col = self.layout.column()
         col.alert = True
-        col.operator(Sync_Stencil_Image.bl_idname, text="Stop Syncing Stencil Image", icon="PAUSE").action = "Clear"
+        col.operator(
+            Sync_Stencil_Image.bl_idname,
+            text="Stop Syncing Stencil Image",
+            icon="PAUSE",
+        ).action = "Clear"
     else:
         self.layout.operator(Sync_Stencil_Image.bl_idname, icon="PLAY")
 
@@ -891,23 +965,31 @@ bpy.types.VIEW3D_PT_tools_brush_settings.append(menu_sync_stencil_image)
 
 
 def sdn_get_image(node: bpy.types.Node):
-    if node.bl_idname in ('PreviewImage', '预览') and len(node.prev) > 0:  # '预览' "Preview" Blender-side node
+    if (
+        node.bl_idname in ("PreviewImage", "预览") and len(node.prev) > 0
+    ):  # '预览' "Preview" Blender-side node
         return node.prev[0].image
 
-    if node.bl_idname == '输入图像':  # "Input Image" Blender-side node
+    if node.bl_idname == "输入图像":  # "Input Image" Blender-side node
         return node.prev
 
-    if node.bl_idname == '存储' and node.mode == 'ToImage':  # "Save" Blender-side node
+    if node.bl_idname == "存储" and node.mode == "ToImage":  # "Save" Blender-side node
         return node.image
 
     image = None
 
-    if node.bl_idname == 'SaveImage' or (node.bl_idname == '存储' and node.mode == 'Save'):
+    if node.bl_idname == "SaveImage" or (
+        node.bl_idname == "存储" and node.mode == "Save"
+    ):
         path = Path(node.output_dir)
         prefix = node.filename_prefix
-        file_re = re.compile(f'{prefix}_([0-9]+)')  # Should the _ at the end be included?
+        file_re = re.compile(
+            f"{prefix}_([0-9]+)"
+        )  # Should the _ at the end be included?
         biggest = (None, -1)
-        if (len(node.inputs) == 1 or node.inputs[1].connections == ()) and path.is_dir():
+        if (
+            len(node.inputs) == 1 or node.inputs[1].connections == ()
+        ) and path.is_dir():
             # Find newest image, by filename
             for f in path.iterdir():
                 if f.is_file():
@@ -924,7 +1006,7 @@ def sdn_get_image(node: bpy.types.Node):
 
                 if image is None:
                     image = bpy.data.images.new(f.stem + f.suffix, 32, 32)
-                    image.source = 'FILE'
+                    image.source = "FILE"
                     image.filepath = f.as_posix()
 
                 return image
@@ -936,10 +1018,14 @@ def get_imeditor(context: bpy.types.Context, check_for_image: bool = False):
     for window in context.window_manager.windows:
         for area in window.screen.areas:
             if check_for_image:
-                if area.type == 'IMAGE_EDITOR' and area.spaces[0].image and len(area.spaces[0].image.pixels) > 0:
+                if (
+                    area.type == "IMAGE_EDITOR"
+                    and area.spaces[0].image
+                    and len(area.spaces[0].image.pixels) > 0
+                ):
                     return area
             else:
-                if area.type == 'IMAGE_EDITOR' and not area.spaces[0].use_image_pin:
+                if area.type == "IMAGE_EDITOR" and not area.spaces[0].use_image_pin:
                     return area
 
     return None
@@ -948,7 +1034,11 @@ def get_imeditor(context: bpy.types.Context, check_for_image: bool = False):
 def get_sdneditor(context: bpy.types.Context):
     for window in context.window_manager.windows:
         for area in window.screen.areas:
-            if area.type == 'NODE_EDITOR' and area.spaces[0].tree_type == TREE_TYPE and area.spaces[0].edit_tree:
+            if (
+                area.type == "NODE_EDITOR"
+                and area.spaces[0].tree_type == TREE_TYPE
+                and area.spaces[0].edit_tree
+            ):
                 return area
 
     return None
@@ -957,49 +1047,57 @@ def get_sdneditor(context: bpy.types.Context):
 class SDNode_To_Image(bpy.types.Operator):
     bl_idname = "sdn.sdn_to_image"
     bl_label = "ComfyUI node to Image Editor"
-    bl_description = "Open the selected Save/Preview/Input Image node's image in an Image Editor"
+    bl_description = (
+        "Open the selected Save/Preview/Input Image node's image in an Image Editor"
+    )
     bl_translation_context = ctxt
 
     @classmethod
     def poll(cls, context: Context):
-        return (context.space_data.type == 'IMAGE_EDITOR' and context.space_data.image and get_sdneditor(context)) or \
-               (context.space_data.type == 'NODE_EDITOR' and context.space_data.tree_type == TREE_TYPE and get_imeditor(context))
+        return (
+            context.space_data.type == "IMAGE_EDITOR"
+            and context.space_data.image
+            and get_sdneditor(context)
+        ) or (
+            context.space_data.type == "NODE_EDITOR"
+            and context.space_data.tree_type == TREE_TYPE
+            and get_imeditor(context)
+        )
 
     def execute(self, context):
-
         node = None
         ime_area = None
 
-        if context.area.type == 'NODE_EDITOR':
+        if context.area.type == "NODE_EDITOR":
             node = context.active_node
             ime_area = get_imeditor(context, False)
 
-        if context.area.type == 'IMAGE_EDITOR':
+        if context.area.type == "IMAGE_EDITOR":
             ime_area = context.area
             sdn_area = get_sdneditor(context)
             if not sdn_area:
-                self.report({'ERROR'}, "No ComfyUI Node Editor found!")
+                self.report({"ERROR"}, "No ComfyUI Node Editor found!")
             node = sdn_area.spaces[0].node_tree.nodes.active
 
         if not node:
-            self.report({'ERROR'}, "No active ComfyUI node!")
-            return {'CANCELLED'}
+            self.report({"ERROR"}, "No active ComfyUI node!")
+            return {"CANCELLED"}
         if not ime_area:
-            self.report({'ERROR'}, "No Image Editor with an open unpinned image found!")
-            return {'CANCELLED'}
+            self.report({"ERROR"}, "No Image Editor with an open unpinned image found!")
+            return {"CANCELLED"}
 
         image = sdn_get_image(node)
         if not image:
-            self.report({'ERROR'}, "Could not retrieve node image!")
-            return {'CANCELLED'}
+            self.report({"ERROR"}, "Could not retrieve node image!")
+            return {"CANCELLED"}
 
         ime_area.spaces[0].image = image
-        ime_area.spaces[0].image.alpha_mode = 'CHANNEL_PACKED'
+        ime_area.spaces[0].image.alpha_mode = "CHANNEL_PACKED"
 
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
-MODIFIED_IMAGE_SUFFIX = '_m'
+MODIFIED_IMAGE_SUFFIX = "_m"
 
 
 class Image_To_SDNode(bpy.types.Operator):
@@ -1008,14 +1106,24 @@ class Image_To_SDNode(bpy.types.Operator):
     bl_description = "Move the current image to a ComfyUI Node Editor node"
     bl_translation_context = ctxt
 
-    force_centered: bpy.props.BoolProperty(name="Force Centered", description="If creating a new node, put it in the centre of the editor",
-                                           translation_context=ctxt, default=False)
+    force_centered: bpy.props.BoolProperty(
+        name="Force Centered",
+        description="If creating a new node, put it in the centre of the editor",
+        translation_context=ctxt,
+        default=False,
+    )
 
     @classmethod
     def poll(cls, context: Context):
-
-        return (context.space_data.type == 'IMAGE_EDITOR' and context.space_data.image and get_sdneditor(context)) or \
-               (context.space_data.type == 'NODE_EDITOR' and context.space_data.tree_type == TREE_TYPE and get_imeditor(context, True))
+        return (
+            context.space_data.type == "IMAGE_EDITOR"
+            and context.space_data.image
+            and get_sdneditor(context)
+        ) or (
+            context.space_data.type == "NODE_EDITOR"
+            and context.space_data.tree_type == TREE_TYPE
+            and get_imeditor(context, True)
+        )
 
     def execute(self, context):
         sdn_area = None
@@ -1023,60 +1131,74 @@ class Image_To_SDNode(bpy.types.Operator):
         image = None
         new_node_loc = None
 
-        if context.area.type == 'IMAGE_EDITOR':
+        if context.area.type == "IMAGE_EDITOR":
             ime_area = context.area
             image = context.space_data.image
             sdn_area = get_sdneditor(context)
 
             if not sdn_area:
-                self.report({'ERROR'}, "No ComfyUI Node Editor found!")
-                return {'CANCELLED'}
+                self.report({"ERROR"}, "No ComfyUI Node Editor found!")
+                return {"CANCELLED"}
 
-            new_node_loc = sdn_area.regions[3].view2d.region_to_view(sdn_area.x + sdn_area.width / 2.0, sdn_area.y + sdn_area.height / 2.0)
+            new_node_loc = sdn_area.regions[3].view2d.region_to_view(
+                sdn_area.x + sdn_area.width / 2.0, sdn_area.y + sdn_area.height / 2.0
+            )
 
-        if context.area.type == 'NODE_EDITOR':
+        if context.area.type == "NODE_EDITOR":
             sdn_area = context.area
             ime_area = get_imeditor(context, True)
             image = ime_area.spaces[0].image
 
             if not ime_area:
-                self.report({'ERROR'}, "No Image Editor with an open image found!")
-                return {'CANCELLED'}
+                self.report({"ERROR"}, "No Image Editor with an open image found!")
+                return {"CANCELLED"}
 
             if not self.force_centered:
                 new_node_loc = sdn_area.spaces[0].cursor_location
             else:
-                new_node_loc = sdn_area.regions[3].view2d.region_to_view(sdn_area.x + sdn_area.width / 2.0, sdn_area.y + sdn_area.height / 2.0)
+                new_node_loc = sdn_area.regions[3].view2d.region_to_view(
+                    sdn_area.x + sdn_area.width / 2.0,
+                    sdn_area.y + sdn_area.height / 2.0,
+                )
 
         if image.is_dirty:
-            image.file_format = 'PNG'
-            if image.alpha_mode != 'CHANNEL_PACKED':
-                self.report({'WARNING'}, "The image is not using channel packed alpha. If you have painted a mask, the color underneath is black!")
+            image.file_format = "PNG"
+            if image.alpha_mode != "CHANNEL_PACKED":
+                self.report(
+                    {"WARNING"},
+                    "The image is not using channel packed alpha. If you have painted a mask, the color underneath is black!",
+                )
 
-            if image.source in ['VIEWER', 'GENERATED']:  # viewer = render result
+            if image.source in ["VIEWER", "GENERATED"]:  # viewer = render result
                 filename = f"render_{uuid.uuid4()}"
                 newpath = f"/tmp/{filename}.png"
-                image.alpha_mode = 'CHANNEL_PACKED'
+                image.alpha_mode = "CHANNEL_PACKED"
                 image.save_render(filepath=newpath, scene=context.scene)
-                newim = bpy.data.images.new(image.name + MODIFIED_IMAGE_SUFFIX, 32, 32, alpha=True)
-                newim.source = 'FILE'
+                newim = bpy.data.images.new(
+                    image.name + MODIFIED_IMAGE_SUFFIX, 32, 32, alpha=True
+                )
+                newim.source = "FILE"
                 newim.filepath = newpath
                 ime_area.spaces[0].image = newim
             else:
-                extensionless = image.filepath_raw[:image.filepath_raw.rfind(".")]
+                extensionless = image.filepath_raw[: image.filepath_raw.rfind(".")]
                 if not extensionless.endswith(MODIFIED_IMAGE_SUFFIX):
                     newpath = extensionless + MODIFIED_IMAGE_SUFFIX + ".png"
-                    image.save_render(filepath=newpath, scene=context.scene)  # save_render is needed to properly save channel packed images
+                    image.save_render(
+                        filepath=newpath, scene=context.scene
+                    )  # save_render is needed to properly save channel packed images
                     image.filepath = newpath
                     image.name = image.name
                 else:
                     image.save()
 
         active = sdn_area.spaces[0].node_tree.nodes.active
-        if active and active.bl_idname == '输入图像' and active.select:  # "Input Image" Blender-side node
+        if (
+            active and active.bl_idname == "输入图像" and active.select
+        ):  # "Input Image" Blender-side node
             active.image = image.filepath_raw
         else:
-            new_node = sdn_area.spaces[0].node_tree.nodes.new('输入图像')
+            new_node = sdn_area.spaces[0].node_tree.nodes.new("输入图像")
             new_node.location = new_node_loc
             new_node.image = image.filepath_raw
             for n in sdn_area.spaces[0].node_tree.nodes:
@@ -1084,7 +1206,8 @@ class Image_To_SDNode(bpy.types.Operator):
             new_node.select = True
             sdn_area.spaces[0].node_tree.nodes.active = new_node
 
-        return {'FINISHED'}
+        return {"FINISHED"}
+
 
 # There are a few cases in which images can't have their alpha changed through the UI, and channel packed alpha is needed to paint them properly.
 # This operator lets the user change the alpha forcefully.
@@ -1098,11 +1221,15 @@ class Image_Set_Channel_Packed(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context: Context):
-        return context.space_data.type == 'IMAGE_EDITOR' and context.space_data.image and context.space_data.image.alpha_mode != 'CHANNEL_PACKED'
+        return (
+            context.space_data.type == "IMAGE_EDITOR"
+            and context.space_data.image
+            and context.space_data.image.alpha_mode != "CHANNEL_PACKED"
+        )
 
     def execute(self, context):
-        context.space_data.image.alpha_mode = 'CHANNEL_PACKED'
-        return {'FINISHED'}
+        context.space_data.image.alpha_mode = "CHANNEL_PACKED"
+        return {"FINISHED"}
 
 
 class Open_Log_Window(bpy.types.Operator):
@@ -1111,7 +1238,7 @@ class Open_Log_Window(bpy.types.Operator):
 
     def execute(self, context: bpy.types.Context):
         WindowLogger.open_window()
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class CleanVRam(bpy.types.Operator):
