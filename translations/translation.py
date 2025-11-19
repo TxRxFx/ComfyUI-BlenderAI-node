@@ -1,12 +1,12 @@
-from pathlib import Path
 import json
+from pathlib import Path
+
 import bpy
 
 ctxt = "SDN"
-LOCALE_MAP = {
-    "zh_HANS": "zh_CN"
-}
+LOCALE_MAP = {"zh_HANS": "zh_CN"}
 from ..datas import get_bl_version
+
 # 4.0 zh_HANS -> zh_HANS
 # 3.0 zh_HANS -> zh_CN
 LOCALE_MAP_INV = {}
@@ -25,16 +25,16 @@ def is_zh_HANS_version():
 
 
 if not is_zh_HANS_version():
-    LOCALE_MAP_INV = {
-        "zh_HANS": "zh_CN"
-    }
+    LOCALE_MAP_INV = {"zh_HANS": "zh_CN"}
 
 
 def get_locale_inv(in_locale):
     return LOCALE_MAP_INV.get(in_locale, in_locale)
 
 
-REG_CTXT = {ctxt, }
+REG_CTXT = {
+    ctxt,
+}
 REPLACE_DICT = {}
 PROP_NAME_HEAD = "sdn_"
 INTERNAL_NAMES = {
@@ -95,8 +95,9 @@ INTERNAL_NAMES = {
     "update",
     "use_custom_color",
     "width",
-    "width_hidden"
+    "width_hidden",
 }
+
 
 class ComfyPropNameTranslate:
     PROP_REG_NAME_MAPS = {}
@@ -111,11 +112,12 @@ class ComfyPropNameTranslate:
         reg_name = bpy.path.clean_name(reg_name)
         if len(reg_name) > 63:
             from hashlib import md5
+
             reg_name = reg_name[:50] + md5(reg_name.encode("utf-8")).hexdigest()[:5]
         reg_names[inp_name] = reg_name
         self.PROP_ORI_NAME_MAPS.setdefault(comfyClass, {})[reg_name] = inp_name
         return reg_name
-    
+
     @classmethod
     def get_prop_ori_name(self, comfyClass, inp_name):
         ori_names = self.PROP_ORI_NAME_MAPS.setdefault(comfyClass, {})
@@ -124,6 +126,7 @@ class ComfyPropNameTranslate:
         ori_name = get_ori_name(inp_name)
         ori_names[inp_name] = ori_name
         return ori_name
+
 
 def get_reg_name(inp_name):
     if inp_name.startswith("_"):
@@ -480,7 +483,7 @@ other = {
     "-AIGODLIKE Adventure Community": "-AIGODLIKE冒险社区",
     "AIGODLIKE Open Source Community - Main Site": "AIGODLIKE开源社区-主站",
     "-Good friends exploring in the AI world (alphabetical order)": "-在AI世界探索的好朋友们(首字母排序)",
-    "\"Thank you, these adventurers who are exploring and sharing their experience in the AI field, hurry up and follow them\"": "“感谢，这些在AI领域探索并分享经验的冒险者，快去关注啦～”",
+    '"Thank you, these adventurers who are exploring and sharing their experience in the AI field, hurry up and follow them"': "“感谢，这些在AI领域探索并分享经验的冒险者，快去关注啦～”",
     "Stencil Offset Size": "镂板偏移大小",
     "Drag Link Result Count": "拖拽连接显示行列数",
     "Drag Link Result Count Column": "列数",
@@ -578,9 +581,21 @@ LANG_TEXT = {
         "序列图": "Sequence",
         "视口": "Viewport",
     },
+    get_locale_inv("en_GB"): {
+        # Blender - British English (same as en_US)
+        "输入图像": "Input Image",
+        "材质图": "Mat Image",
+        "截图": "Screenshot",
+        "存储": "Save",
+        "预览": "Preview",
+        "输入": "Input",
+        "渲染": "Render",
+        "序列图": "Sequence",
+        "视口": "Viewport",
+    },
     get_locale_inv("zh_HANS"): {
         **other,
-    }
+    },
 }
 
 
@@ -701,51 +716,52 @@ def get_ctxt(msgctxt):
     return ctxt
 
 
-cat = {'default_real': None,
-       'default': '*',
-       'operator_default': 'Operator',
-       'ui_events_keymaps': 'UI_Events_KeyMaps',
-       'plural': 'Plural',
-       'id_action': 'Action',
-       'id_armature': 'Armature',
-       'id_brush': 'Brush',
-       'id_camera': 'Camera',
-       'id_cachefile': 'CacheFile',
-       'id_collection': 'Collection',
-       'id_curve': 'Curve',
-       'id_fs_linestyle': 'FreestyleLineStyle',
-       'id_gpencil': 'GPencil',
-       'id_curves': 'Curves',
-       'id_id': 'ID',
-       'id_image': 'Image',
-       'id_shapekey': 'Key',
-       'id_light': 'Light',
-       'id_library': 'Library',
-       'id_lattice': 'Lattice',
-       'id_mask': 'Mask',
-       'id_material': 'Material',
-       'id_metaball': 'Metaball',
-       'id_mesh': 'Mesh',
-       'id_movieclip': 'MovieClip',
-       'id_nodetree': 'NodeTree',
-       'id_object': 'Object',
-       'id_paintcurve': 'PaintCurve',
-       'id_palette': 'Palette',
-       'id_particlesettings': 'ParticleSettings',
-       'id_pointcloud': 'PointCloud',
-       'id_lightprobe': 'LightProbe',
-       'id_scene': 'Scene',
-       'id_screen': 'Screen',
-       'id_sequence': 'Sequence',
-       'id_simulation': 'Simulation',
-       'id_speaker': 'Speaker',
-       'id_sound': 'Sound',
-       'id_texture': 'Texture',
-       'id_text': 'Text',
-       'id_vfont': 'VFont',
-       'id_volume': 'Volume',
-       'id_world': 'World',
-       'id_workspace': 'WorkSpace',
-       'id_windowmanager': 'WindowManager',
-       'editor_view3d': 'View3D'
-       }
+cat = {
+    "default_real": None,
+    "default": "*",
+    "operator_default": "Operator",
+    "ui_events_keymaps": "UI_Events_KeyMaps",
+    "plural": "Plural",
+    "id_action": "Action",
+    "id_armature": "Armature",
+    "id_brush": "Brush",
+    "id_camera": "Camera",
+    "id_cachefile": "CacheFile",
+    "id_collection": "Collection",
+    "id_curve": "Curve",
+    "id_fs_linestyle": "FreestyleLineStyle",
+    "id_gpencil": "GPencil",
+    "id_curves": "Curves",
+    "id_id": "ID",
+    "id_image": "Image",
+    "id_shapekey": "Key",
+    "id_light": "Light",
+    "id_library": "Library",
+    "id_lattice": "Lattice",
+    "id_mask": "Mask",
+    "id_material": "Material",
+    "id_metaball": "Metaball",
+    "id_mesh": "Mesh",
+    "id_movieclip": "MovieClip",
+    "id_nodetree": "NodeTree",
+    "id_object": "Object",
+    "id_paintcurve": "PaintCurve",
+    "id_palette": "Palette",
+    "id_particlesettings": "ParticleSettings",
+    "id_pointcloud": "PointCloud",
+    "id_lightprobe": "LightProbe",
+    "id_scene": "Scene",
+    "id_screen": "Screen",
+    "id_sequence": "Sequence",
+    "id_simulation": "Simulation",
+    "id_speaker": "Speaker",
+    "id_sound": "Sound",
+    "id_texture": "Texture",
+    "id_text": "Text",
+    "id_vfont": "VFont",
+    "id_volume": "Volume",
+    "id_world": "World",
+    "id_workspace": "WorkSpace",
+    "id_windowmanager": "WindowManager",
+    "editor_view3d": "View3D",
+}
