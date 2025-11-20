@@ -203,7 +203,7 @@ class Ops(bpy.types.Operator):
 
     def find_frames_nodes(self, tree):
         nodes = [
-            n for n in find_nodes_by_idname(tree, "输入图像") if n.mode == "序列图"
+            n for n in find_nodes_by_idname(tree, "InputImage") if n.mode == "Sequence"
         ]
         return nodes
 
@@ -273,7 +273,7 @@ class Ops(bpy.types.Operator):
                 old_cfg[fnode]["mode"] = fnode.mode
                 old_cfg[fnode]["image"] = fnode.image
             pnode, pframes = node_frames.popitem()
-            pnode.mode = "输入"
+            pnode.mode = "Input"
             for frame in pframes:
                 pnode.image = pframes[frame]
                 # logger.debug(f"F {frame}: {pnode.image}")
@@ -286,7 +286,7 @@ class Ops(bpy.types.Operator):
                         # self.report({"ERROR"}, error_info)
                         logger.error(error_info)
                         break
-                    fnode.mode = "输入"
+                    fnode.mode = "Input"
                     fnode.image = fpath
                     pre_img_map[fnode] = fpath
                     # logger.debug(f"F {frame}: {fnode.image}")
@@ -337,7 +337,7 @@ class Ops(bpy.types.Operator):
                     images.append(img_node.image)
                 return images
 
-            save_nodes = find_nodes_by_idname(tree, "存储")
+            save_nodes = find_nodes_by_idname(tree, "BlenderSave")
             images = []
             query_objs = []
             if mat_image_node.mode == "Object":
@@ -398,7 +398,7 @@ class Ops(bpy.types.Operator):
             elif bpy.context.scene.sdn.frame_mode == "Batch":
                 batch_dir = bpy.context.scene.sdn.batch_dir
                 select_node = tree.nodes.active
-                if not select_node or select_node.bl_idname != "输入图像":
+                if not select_node or select_node.bl_idname != "InputImage":
                     self.report({"ERROR"}, "Input Image Node Not Selected!")
                     return {"FINISHED"}
 
@@ -966,14 +966,16 @@ bpy.types.VIEW3D_PT_tools_brush_settings.append(menu_sync_stencil_image)
 
 def sdn_get_image(node: bpy.types.Node):
     if (
-        node.bl_idname in ("PreviewImage", "预览") and len(node.prev) > 0
+        node.bl_idname in ("PreviewImage", "BlenderPreview") and len(node.prev) > 0
     ):  # '预览' "Preview" Blender-side node
         return node.prev[0].image
 
-    if node.bl_idname == "输入图像":  # "Input Image" Blender-side node
+    if node.bl_idname == "InputImage":  # "Input Image" Blender-side node
         return node.prev
 
-    if node.bl_idname == "存储" and node.mode == "ToImage":  # "Save" Blender-side node
+    if (
+        node.bl_idname == "BlenderSave" and node.mode == "ToImage"
+    ):  # "Save" Blender-side node
         return node.image
 
     image = None

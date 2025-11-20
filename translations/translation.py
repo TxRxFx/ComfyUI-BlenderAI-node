@@ -14,7 +14,7 @@ LOCALE_MAP_INV = {}
 
 def is_zh_HANS_version():
     try:
-        bpy.context.preferences.view.language = "XXXXX"
+        bpy.context.preferences.view.language = "en_GB"
     except TypeError as e:
         # import re
         # find_tuple = re.match(r".*?\('(.*?)\'\).*?", str(e))
