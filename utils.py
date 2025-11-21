@@ -1,19 +1,22 @@
-import struct
-import queue
-import platform
-import time
-import re
 import json
-import bpy
-import addon_utils
-from pathlib import Path
-from functools import lru_cache
-from urllib.parse import urlparse
+import platform
+import queue
+import re
+import struct
+import time
 from ast import literal_eval
-from .kclogger import logger
-from .translations import LANG_TEXT
-from .timer import Timer
+from functools import lru_cache
+from pathlib import Path
+from urllib.parse import urlparse
+
+import addon_utils
+import bpy
+
 from .datas import IMG_SUFFIX, get_bl_version
+from .kclogger import logger
+from .timer import Timer
+from .translations import LANG_TEXT
+
 translation = {}
 meta_info = {}
 
@@ -40,6 +43,7 @@ def get_bl_module(name=None):
 
 def popup_folder(path: Path):
     import os
+
     if platform.system() == "Windows":
         if path.is_file():
             path = path.parent
@@ -75,6 +79,7 @@ def set_ai_mat_tree(obj: bpy.types.Object, tree: bpy.types.NodeTree):
 
 def read_json(path: Path | str) -> dict:
     import json
+
     encodings = ["utf8", "gbk"]
     for encoding in encodings:
         try:
@@ -93,7 +98,7 @@ def rmtree(path: Path):
         for child in path.iterdir():
             rmtree(child)
         try:
-            path.rmdir()  # nas 的共享盘可能会有残留
+            path.rmdir()  # NAS shared drives may leave remnants
         except BaseException:
             ...
 
@@ -107,6 +112,7 @@ def _T(word):
         return word
     import bpy
     from bpy.app.translations import pgettext
+
     locale = bpy.context.preferences.view.language
     culture = translation.setdefault(locale, {})
     if t := culture.get(word):
@@ -114,6 +120,7 @@ def _T(word):
 
     def f(word):
         culture[word] = pgettext(word)
+
     Timer.put((f, word))
     return LANG_TEXT.get(locale, {}).get(word, word)
 
@@ -123,7 +130,9 @@ logger.set_translate(_T)
 
 def _T2(word):
     import bpy
+
     from .translations.translation import REPLACE_DICT
+
     locale = bpy.context.preferences.view.language
     return REPLACE_DICT.get(locale, {}).get(word, word)
 
@@ -138,15 +147,18 @@ def find_area_by_type(screen: bpy.types.Screen, area_type, index) -> bpy.types.A
         return areas[index]
     return None
 
+
 def find_region_by_type(area: bpy.types.Area, region_type) -> bpy.types.Region:
     for region in area.regions:
         if region.type == region_type:
             return region
     return None
 
+
 def update_screen():
     try:
         import bpy
+
         for area in bpy.context.screen.areas:
             area.tag_redraw()
         bpy.context.workspace.status_text_set_internal(None)
@@ -157,6 +169,7 @@ def update_screen():
 def update_node_editor():
     try:
         import bpy
+
         for area in bpy.context.screen.areas:
             for space in area.spaces:
                 if space.type != "NODE_EDITOR":
@@ -170,10 +183,10 @@ def update_node_editor():
 
 def clear_cache(d=None):
     from shutil import rmtree as shutil_rmtree
+
     if not d:
         clear_cache(Path(__file__).parent)
     else:
-
         for file in Path(d).iterdir():
             if not file.is_dir():
                 continue
@@ -183,20 +196,21 @@ def clear_cache(d=None):
 
 
 def rgb2hex(r, g, b, *args):
-    hex_val = f"#{int(r*256):02x}{int(g*256):02x}{int(b*256):02x}"
+    hex_val = f"#{int(r * 256):02x}{int(g * 256):02x}{int(b * 256):02x}"
     return hex_val
 
 
 def hex2rgb(hex_val):
-    hex_val = hex_val.lstrip('#')
+    hex_val = hex_val.lstrip("#")
     if len(hex_val) == 3:
         return [int(h, 16) / 16 for h in hex_val]
-    return [int(hex_val[i:i + 2], 16) / 256 for i in (0, 2, 4)]
+    return [int(hex_val[i : i + 2], 16) / 256 for i in (0, 2, 4)]
 
 
 @lru_cache(maxsize=16)
 def is_ipv6(ip):
     import ipaddress
+
     try:
         ipaddress.IPv6Address(ip)
         return True
@@ -207,6 +221,7 @@ def is_ipv6(ip):
 @lru_cache(maxsize=16)
 def is_ipv4(ip):
     import ipaddress
+
     try:
         ipaddress.IPv4Address(ip)
         return True
@@ -217,8 +232,15 @@ def is_ipv4(ip):
 @lru_cache(maxsize=16)
 def is_domain(ip):
     import re
-    return re.match(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63}(?<!-))*\.[A-Za-z]{2,}$", ip)
-    return re.match(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$", ip)
+
+    return re.match(
+        r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63}(?<!-))*\.[A-Za-z]{2,}$",
+        ip,
+    )
+    return re.match(
+        r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$",
+        ip,
+    )
 
 
 class PrevMgr:
@@ -226,8 +248,10 @@ class PrevMgr:
 
     @staticmethod
     def new():
-        import bpy.utils.previews
         import random
+
+        import bpy.utils.previews
+
         prev = bpy.utils.previews.new()
         while (i := random.randint(0, 999999999)) in PrevMgr.__PREV__:
             continue
@@ -237,6 +261,7 @@ class PrevMgr:
     @staticmethod
     def remove(prev):
         import bpy.utils.previews
+
         bpy.utils.previews.remove(prev)
 
     @staticmethod
@@ -278,6 +303,7 @@ class Icon(metaclass=MetaIn):
     @staticmethod
     def update_path2bpy():
         import bpy
+
         Icon.PATH2BPY.clear()
         for i in bpy.data.images:
             Icon.PATH2BPY[FSWatcher.to_str(i.filepath)] = i
@@ -286,8 +312,9 @@ class Icon(metaclass=MetaIn):
     def apply_alpha(img):
         if img.file_format != "PNG" or img.channels < 4:
             return
-        # 预乘alpha 到rgb
+        # Premultiply alpha into RGB
         import numpy as np
+
         pixels = np.zeros(img.size[0] * img.size[1] * 4, dtype=np.float32)
         img.pixels.foreach_get(pixels)
         sized_pixels = pixels.reshape(-1, 4)
@@ -305,6 +332,7 @@ class Icon(metaclass=MetaIn):
     @staticmethod
     def set_hq_preview():
         from .preference import get_pref
+
         Icon.ENABLE_HQ_PREVIEW = get_pref().enable_hq_preview
 
     @staticmethod
@@ -363,7 +391,7 @@ class Icon(metaclass=MetaIn):
             return Icon[path]
         else:
             if path not in Icon:
-                Icon.PREV_DICT.load(path, path, 'IMAGE')
+                Icon.PREV_DICT.load(path, path, "IMAGE")
             if reload:
                 Timer.put(Icon.PREV_DICT[path].reload)
             return Icon[path]
@@ -371,6 +399,7 @@ class Icon(metaclass=MetaIn):
     @staticmethod
     def reg_icon_hq(path):
         import bpy
+
         p = FSWatcher.to_path(path)
         path = FSWatcher.to_str(path)
         if path in Icon:
@@ -379,7 +408,9 @@ class Icon(metaclass=MetaIn):
             img = bpy.data.images.load(path)
             Icon.apply_alpha(img)
             Icon.reg_icon_by_pixel(img, path)
-            Timer.put((bpy.data.images.remove, img))  # 直接使用 bpy.data.images.remove 会导致卡死
+            Timer.put(
+                (bpy.data.images.remove, img)
+            )  # Directly using bpy.data.images.remove can cause a hang
 
     @staticmethod
     def find_image(path):
@@ -396,9 +427,10 @@ class Icon(metaclass=MetaIn):
     @staticmethod
     def load_icon(path):
         import bpy
+
         p = FSWatcher.to_path(path)
         path = FSWatcher.to_str(path)
-        # ctrl + z 导致bpy.data中的图像被删除
+        # Ctrl+Z can remove images from bpy.data
         if path not in Icon.PATH2BPY:
             Icon.IMG_STATUS.pop(path, None)
         if not Icon.can_mark_image(path):
@@ -462,15 +494,22 @@ class Icon(metaclass=MetaIn):
 
 
 class PngParse:
-
     @staticmethod
     def read_head(pngpath):
-        with open(pngpath, 'rb') as f:
+        with open(pngpath, "rb") as f:
             png_header = f.read(25)
-            file_sig, ihdr_sig, width, height, bit_depth, color_type, \
-                compression_method, filter_method, interlace_method = \
-                struct.unpack('>8s4sIIBBBBB', png_header)
-            # 输出 PNG 文件头
+            (
+                file_sig,
+                ihdr_sig,
+                width,
+                height,
+                bit_depth,
+                color_type,
+                compression_method,
+                filter_method,
+                interlace_method,
+            ) = struct.unpack(">8s4sIIBBBBB", png_header)
+            # Read PNG file header
             _ = {
                 "PNG file signature": file_sig,
                 "IHDR_signature": ihdr_sig,
@@ -479,31 +518,33 @@ class PngParse:
                 "Color_type": color_type,
                 "Compression_method": compression_method,
                 "Filter_method": filter_method,
-                "Interlace_method": interlace_method
+                "Interlace_method": interlace_method,
             }
 
     @staticmethod
     def read_text_chunk(pngpath) -> dict[str, str]:
         data = {}
-        with open(pngpath, 'rb') as file:
+        with open(pngpath, "rb") as file:
             signature = file.read(8)
-            if signature != b'\x89PNG\r\n\x1a\n':
-                print('Error: Not a PNG file')
+            if signature != b"\x89PNG\r\n\x1a\n":
+                print("Error: Not a PNG file")
                 return data
 
             # IDHR, PLTE, sRGB, tEXt
             while True:
                 length_bytes = file.read(4)
-                length = struct.unpack('>I', length_bytes)[0]  # Read chunk length (4 bytes)
-                chunk_type = file.read(4)       # Read chunk type (4 bytes)
+                length = struct.unpack(">I", length_bytes)[
+                    0
+                ]  # Read chunk length (4 bytes)
+                chunk_type = file.read(4)  # Read chunk type (4 bytes)
                 chunk_data = file.read(length)  # Read chunk data (length bytes)
-                _ = file.read(4)                # Read CRC (4 bytes)
-                if chunk_type in {b'IHDR', b'PLTE'}:  # header and Palette
+                _ = file.read(4)  # Read CRC (4 bytes)
+                if chunk_type in {b"IHDR", b"PLTE"}:  # header and Palette
                     continue
-                elif chunk_type == b'tEXt':
-                    keyword, text = chunk_data.decode().split('\0', 1)
+                elif chunk_type == b"tEXt":
+                    keyword, text = chunk_data.decode().split("\0", 1)
                     data[keyword] = text
-                elif chunk_type == b'IEND':
+                elif chunk_type == b"IEND":
                     break
         return data
 
@@ -522,6 +563,7 @@ class PkgInstaller:
     def select_pip_source():
         if not PkgInstaller.fast_url:
             import requests
+
             t, PkgInstaller.fast_url = 999, PkgInstaller.source[0]
             for url in PkgInstaller.source:
                 try:
@@ -539,6 +581,7 @@ class PkgInstaller:
     @staticmethod
     def is_installed(package):
         import importlib
+
         try:
             return importlib.import_module(package)
         except ModuleNotFoundError:
@@ -547,6 +590,7 @@ class PkgInstaller:
     @staticmethod
     def prepare_pip():
         import ensurepip
+
         if PkgInstaller.is_installed("pip"):
             return True
         try:
@@ -562,13 +606,14 @@ class PkgInstaller:
             return False
         need = [pkg for pkg in packages if not PkgInstaller.is_installed(pkg)]
         from pip._internal import main
+
         if need:
             url = PkgInstaller.select_pip_source()
         for pkg in need:
             try:
                 site = urlparse(url)
-                # 避免build
-                command = ['install', pkg, "-i", url, "--prefer-binary"]
+                # Avoid building from source
+                command = ["install", pkg, "-i", url, "--prefer-binary"]
                 command.append("--trusted-host")
                 command.append(site.netloc)
                 main(command)
@@ -581,13 +626,14 @@ class PkgInstaller:
 
 class FSWatcher:
     """
-    监听文件/文件夹变化的工具类
-        register: 注册监听, 传入路径和回调函数(可空)
-        unregister: 注销监听
-        run: 监听循环, 使用单例,只在第一次初始化时调用
-        stop: 停止监听, 释放资源
-        consume_change: 消费变化, 当监听对象发生变化时记录为changed, 主动消费后置False, 用于自定义回调函数
+    Utility class to watch files/folders for changes.
+        register: Register a watcher, pass path and optional callback
+        unregister: Unregister a watcher
+        run: Start the watch loop (singleton, called only on first init)
+        stop: Stop watching and release resources
+        consume_change: Consume a change; marks changed->False after consumption. Used by custom callbacks
     """
+
     _watcher_path: dict[Path, bool] = {}
     _watcher_stat = {}
     _watcher_callback = {}
@@ -621,11 +667,13 @@ class FSWatcher:
         if cls._use_threading:
             # use threading
             from threading import Thread
+
             Thread(target=cls._loop, daemon=True).start()
             Thread(target=cls._run_ex, daemon=True).start()
         else:
             # use timer
             import bpy
+
             bpy.app.timers.register(cls._loop_timer, persistent=True)
             bpy.app.timers.register(cls._run_ex_timer, persistent=True)
 
@@ -659,7 +707,7 @@ class FSWatcher:
     @classmethod
     def _loop(cls):
         """
-            监听所有注册的路径, 有变化时记录为changed
+        Monitor all registered paths; mark as changed when modified
         """
         while cls._running:
             cls._loop_one()
@@ -700,8 +748,11 @@ class FSWatcher:
         if platform.system() != "Windows":
             return {}
         import subprocess
+
         try:
-            result = subprocess.run("net use", capture_output=True, text=True, encoding="gbk", check=True)
+            result = subprocess.run(
+                "net use", capture_output=True, text=True, encoding="gbk", check=True
+            )
         except subprocess.CalledProcessError as e:
             logger.warning(e)
             return {}
@@ -730,7 +781,7 @@ class FSWatcher:
         except FileNotFoundError as e:
             res_str = p.as_posix()
             logger.warning(e)
-        # 处理nas路径
+        # Handle NAS paths
         for local_drive, nas_path in cls.get_nas_mapping().items():
             if not res_str.startswith(nas_path):
                 continue
@@ -864,7 +915,10 @@ class WebUIToComfyUI:
         "tile_resample": "TilePreprocessor",
     }
 
-    def __init__(self, text: str = "", ):
+    def __init__(
+        self,
+        text: str = "",
+    ):
         self.text: str = text
         self.params: dict = {}
         self.parse_cn = False
@@ -874,12 +928,18 @@ class WebUIToComfyUI:
 
     def get_registered_node_types(self):
         from .SDNode.nodes import NodeBase
-        registered_node_types = {n.class_type: n.__metadata__ for n in NodeBase.__subclasses__()}
+
+        registered_node_types = {
+            n.class_type: n.__metadata__ for n in NodeBase.__subclasses__()
+        }
         return registered_node_types
 
     def with_efficient(self):
         registered_node_types = self.get_registered_node_types()
-        return "Efficient Loader" in registered_node_types and "KSampler (Efficient)" in registered_node_types
+        return (
+            "Efficient Loader" in registered_node_types
+            and "KSampler (Efficient)" in registered_node_types
+        )
 
     def apply_nodes_offset(this, nodes, offset=None):
         if offset is None:
@@ -934,7 +994,7 @@ class WebUIToComfyUI:
         find_node = None
         find_node_index = -1
         for i in range(len(workflow["nodes"])):
-            if (workflow["nodes"][i]["id"] == node_id):
+            if workflow["nodes"][i]["id"] == node_id:
                 find_node = workflow["nodes"][i]
                 find_node_index = i
                 break
@@ -1022,7 +1082,7 @@ class WebUIToComfyUI:
         if "Denoising strength" in params:
             ksampler["widgets_values"][6] = params["Denoising strength"]
             if float(params["Denoising strength"]) < 1:
-                # 图生图, 需要添加图片输入
+                # For image-to-image, need to add an image input
                 last_node_id = wk["last_node_id"]
                 load_image = {
                     "id": last_node_id + 1,
@@ -1036,7 +1096,7 @@ class WebUIToComfyUI:
                             "type": "IMAGE",
                             "links": [],
                             "shape": 3,
-                            "label": "图像",
+                            "label": "Image",
                             "slot_index": 0,
                         },
                         {
@@ -1044,7 +1104,7 @@ class WebUIToComfyUI:
                             "type": "MASK",
                             "links": None,
                             "shape": 3,
-                            "label": "遮罩",
+                            "label": "Mask",
                         },
                     ],
                     "properties": {"Node name for S&R": "LoadImage"},
@@ -1061,7 +1121,7 @@ class WebUIToComfyUI:
                             "name": "pixels",
                             "type": "IMAGE",
                             "link": 0,
-                            "label": "图像",
+                            "label": "Image",
                         },
                         {
                             "name": "vae",
@@ -1093,10 +1153,12 @@ class WebUIToComfyUI:
             model = params["Model"]  # TODO: 模型得加后缀名字, 和webui不同
             registered_node_types = self.get_registered_node_types()
             node_type = registered_node_types[checkpoint_loader["type"]]
-            model_list = node_type.get("input", {}).get("required", {}).get("ckpt_name", [[]])[0]
+            model_list = (
+                node_type.get("input", {}).get("required", {}).get("ckpt_name", [[]])[0]
+            )
             for _m in model_list:
                 sep_i = _m.rfind("/")
-                if _m[sep_i + 1:].split(".")[0] != model:
+                if _m[sep_i + 1 :].split(".")[0] != model:
                     continue
                 checkpoint_loader["widgets_values"][0] = _m
 
@@ -1156,7 +1218,7 @@ class WebUIToComfyUI:
                 last_node_id = wk["last_node_id"]
                 load_image = {
                     "id": last_node_id + 1,
-                    "type": "输入图像",
+                    "type": "Input Image",
                     "pos": [210, -110],
                     "size": {0: 200, 1: 100},
                     "mode": 0,
@@ -1166,18 +1228,13 @@ class WebUIToComfyUI:
                             "name": "IMAGE",
                             "type": "IMAGE",
                             "links": [],
-                            "slot_index": 0
+                            "slot_index": 0,
                         },
-                        {
-                            "name": "MASK",
-                            "type": "MASK",
-                            "links": [],
-                            "slot_index": 1
-                        }
+                        {"name": "MASK", "type": "MASK", "links": [], "slot_index": 1},
                     ],
-                    "title": "输入图像",
+                    "title": "Input Image",
                     "properties": {},
-                    "widgets_values": ["", "输入"]
+                    "widgets_values": ["", "Input"],
                 }
                 vae_encode = {
                     "id": last_node_id + 2,
@@ -1190,7 +1247,7 @@ class WebUIToComfyUI:
                             "name": "pixels",
                             "type": "IMAGE",
                             "link": 0,
-                            "label": "图像",
+                            "label": "Image",
                         },
                         {
                             "name": "vae",
@@ -1221,10 +1278,12 @@ class WebUIToComfyUI:
             model = params["Model"]  # 模型得加后缀名字, 和webui不同
             registered_node_types = self.get_registered_node_types()
             node_type = registered_node_types[loader["type"]]
-            model_list = node_type.get("input", {}).get("required", {}).get("ckpt_name", [[]])[0]
+            model_list = (
+                node_type.get("input", {}).get("required", {}).get("ckpt_name", [[]])[0]
+            )
             for _m in model_list:
                 sep_i = _m.rfind("/")
-                if _m[sep_i + 1:].split(".")[0] != model:
+                if _m[sep_i + 1 :].split(".")[0] != model:
                     continue
                 loader["widgets_values"][0] = _m
 
@@ -1258,7 +1317,7 @@ class WebUIToComfyUI:
             pp = pp[1].strip()
             pp_str = pp[:-1].strip() if pp[-1] == "," else pp
             if pp_str.startswith("parameters"):
-                pp_str = pp_str[len("parameters"):].strip()
+                pp_str = pp_str[len("parameters") :].strip()
             self.params["Positive prompt"] = pp_str
             self.text = self.text.replace(pp, "").strip()
         np = re.search("(Negative prompt: .*?)(?:Steps: )", self.text, re.S)
@@ -1266,7 +1325,7 @@ class WebUIToComfyUI:
         np = np if np else re.search("Negative prompt: (.*?)(?:,\n)", self.text, re.S)
         np = np if np else re.search("Negative prompt: (.*?)(?:\n)", self.text, re.S)
         if np:
-            prompt = np[1][len("Negative prompt: "):].strip()
+            prompt = np[1][len("Negative prompt: ") :].strip()
             prompt = prompt[:-1].strip() if prompt[-1] == "," else prompt
             self.params["Negative prompt"] = prompt
             self.text = self.text.replace(np[1], "").strip()
@@ -1289,7 +1348,9 @@ class WebUIToComfyUI:
                 starting_end = re.search(r"starting\/ending: \((.*?)\),", text, re.S)[1]
                 starting_end = literal_eval(f"[{starting_end}]") if starting_end else []
                 resize_mode = re.search("resize mode: (.*?), ", text, re.S)[1]
-                pixel_perfect = re.search("pixel_perfect: (.*?), ", text, re.S)[1] == "True"
+                pixel_perfect = (
+                    re.search("pixel_perfect: (.*?), ", text, re.S)[1] == "True"
+                )
                 control_mode = re.search("control mode: (.*?),", text, re.S)[1]
                 pp_params = re.search(r"preprocessor params: \((.*?)\)", text, re.S)[1]
                 # 去掉括号并按逗号分割
@@ -1332,6 +1393,7 @@ class WebUIToComfyUI:
                     "control_mode": control_mode,
                 }
             return params
+
         for cn in re.finditer(r'(Control[nN]et \d+): "(.*?)",', self.text, re.S):
             self.params[cn[1]] = parse_cn_params(cn[2]) if self.parse_cn else cn[2]
             self.text = self.text.replace(cn[0], "")
@@ -1350,7 +1412,7 @@ class WebUIToComfyUI:
                     "type": "IMAGE",
                     "links": [],
                     "shape": 3,
-                    "label": "图像",
+                    "label": "Image",
                     "slot_index": 0,
                 },
                 {
@@ -1358,7 +1420,7 @@ class WebUIToComfyUI:
                     "type": "MASK",
                     "links": None,
                     "shape": 3,
-                    "label": "遮罩",
+                    "label": "Mask",
                 },
             ],
             "widgets_values": ["xxx.png", "image"],
@@ -1382,7 +1444,7 @@ class WebUIToComfyUI:
                         "name": "image",
                         "type": "IMAGE",
                         "link": None,
-                        "label": "图像",
+                        "label": "Image",
                     },
                 ],
                 "outputs": [
@@ -1391,7 +1453,7 @@ class WebUIToComfyUI:
                         "type": "IMAGE",
                         "links": [],
                         "shape": 3,
-                        "label": "图像",
+                        "label": "Image",
                         "slot_index": 0,
                     },
                 ],
@@ -1408,13 +1470,13 @@ class WebUIToComfyUI:
                         "name": "positive",
                         "type": "CONDITIONING",
                         "link": None,
-                        "label": "正面条件",
+                        "label": "Positive",
                     },
                     {
                         "name": "negative",
                         "type": "CONDITIONING",
                         "link": None,
-                        "label": "负面条件",
+                        "label": "Negative",
                     },
                     {
                         "name": "control_net",
@@ -1426,7 +1488,7 @@ class WebUIToComfyUI:
                         "name": "image",
                         "type": "IMAGE",
                         "link": None,
-                        "label": "图像",
+                        "label": "Image",
                     },
                 ],
                 "outputs": [
@@ -1435,7 +1497,7 @@ class WebUIToComfyUI:
                         "type": "CONDITIONING",
                         "links": [],
                         "shape": 3,
-                        "label": "正面条件",
+                        "label": "Positive",
                         "slot_index": 0,
                     },
                     {
@@ -1443,7 +1505,7 @@ class WebUIToComfyUI:
                         "type": "CONDITIONING",
                         "links": [20],
                         "shape": 3,
-                        "label": "负面条件",
+                        "label": "Negative",
                         "slot_index": 1,
                     },
                 ],
@@ -1483,12 +1545,16 @@ class WebUIToComfyUI:
 
             registered_node_types = this.get_registered_node_types()
             node_type = registered_node_types[controlnet_loader["type"]]
-            ml = node_type.get("input", {}).get("required", {}).get("control_net_name", [[]])[0]
+            ml = (
+                node_type.get("input", {})
+                .get("required", {})
+                .get("control_net_name", [[]])[0]
+            )
             ml = ml or []
             find_cn_model = ml[0] if ml else ""
             for _m in ml or []:
                 sep_i = _m.rfind("/")
-                if (_m[:sep_i + 1].split(".")[0] in [cn_model, cn_model2]):
+                if _m[: sep_i + 1].split(".")[0] in [cn_model, cn_model2]:
                     find_cn_model = _m
             controlnet_loader["widgets_values"][0] = find_cn_model
             apply_controlnet["widgets_values"][0] = value["weight"]
@@ -1499,15 +1565,17 @@ class WebUIToComfyUI:
             this.make_link(wk, aux_preprocessor, 0, apply_controlnet, 3)
             # 完美像素
             if value["pixel_perfect"]:
-                aux_preprocessor["inputs"].append({
-                    "name": "resolution",
-                    "type": "INT",
-                    "link": None,
-                    "widget": {
+                aux_preprocessor["inputs"].append(
+                    {
                         "name": "resolution",
-                    },
-                    "label": "分辨率",
-                })
+                        "type": "INT",
+                        "link": None,
+                        "widget": {
+                            "name": "resolution",
+                        },
+                        "label": "Resolution",
+                    }
+                )
                 gen_res = {
                     "id": wk["last_node_id"] + 1,
                     "type": "ImageGenResolutionFromImage",
@@ -1518,7 +1586,7 @@ class WebUIToComfyUI:
                             "name": "image",
                             "type": "IMAGE",
                             "link": None,
-                            "label": "图像",
+                            "label": "Image",
                         },
                     ],
                     "outputs": [
@@ -1527,7 +1595,7 @@ class WebUIToComfyUI:
                             "type": "INT",
                             "links": [],
                             "shape": 3,
-                            "label": "宽度(整数)",
+                            "label": "Width (int)",
                             "slot_index": 0,
                         },
                         {
@@ -1535,7 +1603,7 @@ class WebUIToComfyUI:
                             "type": "INT",
                             "links": [],
                             "shape": 3,
-                            "label": "高度(整数)",
+                            "label": "Height (int)",
                             "slot_index": 1,
                         },
                     ],
@@ -1550,7 +1618,7 @@ class WebUIToComfyUI:
                             "name": "original_image",
                             "type": "IMAGE",
                             "link": None,
-                            "label": "图像",
+                            "label": "Image",
                         },
                         {
                             "name": "image_gen_width",
@@ -1559,7 +1627,7 @@ class WebUIToComfyUI:
                             "widget": {
                                 "name": "image_gen_width",
                             },
-                            "label": "宽度",
+                            "label": "Width",
                         },
                         {
                             "name": "image_gen_height",
@@ -1568,7 +1636,7 @@ class WebUIToComfyUI:
                             "widget": {
                                 "name": "image_gen_height",
                             },
-                            "label": "高度",
+                            "label": "Height",
                         },
                     ],
                     "outputs": [
@@ -1577,7 +1645,7 @@ class WebUIToComfyUI:
                             "type": "INT",
                             "links": [],
                             "shape": 3,
-                            "label": "分辨率(整数)",
+                            "label": "Resolution (int)",
                             "slot_index": 0,
                         },
                     ],
@@ -1716,7 +1784,7 @@ BREAK multicolored background
             "Denoising strength": "0.5",
             "Clip skip": "2",
             "ADetailer model": "face_yolov8n.pt",
-            "ADetailer prompt": "\"black eyes, black hair, \"",
+            "ADetailer prompt": '"black eyes, black hair, "',
             "ADetailer confidence": "0.3",
             "ADetailer dilate erode": "4",
             "ADetailer mask blur": "4",
@@ -1728,7 +1796,7 @@ BREAK multicolored background
             # "Hires steps": "4",
             # "Hires upscaler": "ESRGAN_4x",
             # "Downcast alphas_cumprod": "True",
-            "Version": "1.8.0-RC"
+            "Version": "1.8.0-RC",
         }
         assert self._parse(in_t0) == out_t0, "Test 0 failed"
         in_t1 = """
@@ -1748,9 +1816,9 @@ Steps: 30, Sampler: UniPC, Schedule type: Karras, CFG scale: 7, Seed: 3620085674
             "Model hash": "3d1b3c42ec",
             "Model": "AWPainting_v1.2",
             "ControlNet 0": "Module: tile_resample, Model: control_v11f1e_sd15_tile_fp16 [3b860298], Weight: 0.6, Resize Mode: Crop and Resize, Processor Res: 512, Threshold A: 1.0, Threshold B: 0.5, Guidance Start: 0.0, Guidance End: 1.0, Pixel Perfect: True, Control Mode: Balanced",
-            "TI hashes": "\"ng_deepnegative_v1_75t: 54e7e4826d53\"",
+            "TI hashes": '"ng_deepnegative_v1_75t: 54e7e4826d53"',
             # "Pad conds": "True",
-            "Version": "v1.9.4"
+            "Version": "v1.9.4",
         }
         assert self._parse(in_t1) == out_t1, "Test 1 failed"
 
@@ -1779,7 +1847,7 @@ parameters(official art:1.2),(colorful:1.1),(masterpiece:1.2),best quality,maste
             "Denoising strength": "0.75",
             "Clip skip": "2",
             "Tiled Diffusion": '{"Method": "MultiDiffusion", "Tile tile width": 96, "Tile tile height": 96, "Tile Overlap": 48, "Tile batch size": 4, "Keep input size": true, "NoiseInv": true, "NoiseInv Steps": 10, "NoiseInv Retouch": 1, "NoiseInv Renoise strength": 0.5, "NoiseInv Kernel size": 64}',
-            "ControlNet 0": 'Module: tile_resample, Model: control_v11f1e_sd15_tile_fp16 [3b860298], Weight: 0.5, Resize Mode: Crop and Resize, Processor Res: 512, Threshold A: 1.0, Threshold B: 0.5, Guidance Start: 0.0, Guidance End: 1.0, Pixel Perfect: True, Control Mode: Balanced',
+            "ControlNet 0": "Module: tile_resample, Model: control_v11f1e_sd15_tile_fp16 [3b860298], Weight: 0.5, Resize Mode: Crop and Resize, Processor Res: 512, Threshold A: 1.0, Threshold B: 0.5, Guidance Start: 0.0, Guidance End: 1.0, Pixel Perfect: True, Control Mode: Balanced",
             # "Pad conds": "True",
             "Version": "v1.9.4",
         }
@@ -1850,163 +1918,102 @@ classic, medieval, noble
                 {
                     "id": 7,
                     "type": "CLIPTextEncode",
-                    "pos": [
-                        413,
-                        389
-                    ],
-                    "size": {
-                        "0": 425.27801513671875,
-                        "1": 180.6060791015625
-                    },
+                    "pos": [413, 389],
+                    "size": {"0": 425.27801513671875, "1": 180.6060791015625},
                     "mode": 0,
                     "inputs": [
-                        {
-                            "name": "clip",
-                            "type": "CLIP",
-                            "link": 12,
-                            "label": "CLIP"
-                        }
+                        {"name": "clip", "type": "CLIP", "link": 12, "label": "CLIP"}
                     ],
                     "outputs": [
                         {
                             "name": "CONDITIONING",
                             "type": "CONDITIONING",
-                            "links": [
-                                6
-                            ],
+                            "links": [6],
                             "slot_index": 0,
-                            "label": "条件"
+                            "label": "条件",
                         }
                     ],
-                    "properties": {
-                        "Node name for S&R": "CLIPTextEncode"
-                    },
-                    "widgets_values": [
-                        "text, watermark"
-                    ]
+                    "properties": {"Node name for S&R": "CLIPTextEncode"},
+                    "widgets_values": ["text, watermark"],
                 },
                 {
                     "id": 6,
                     "type": "CLIPTextEncode",
-                    "pos": [
-                        415,
-                        186
-                    ],
-                    "size": {
-                        "0": 422.84503173828125,
-                        "1": 164.31304931640625
-                    },
+                    "pos": [415, 186],
+                    "size": {"0": 422.84503173828125, "1": 164.31304931640625},
                     "mode": 0,
                     "inputs": [
-                        {
-                            "name": "clip",
-                            "type": "CLIP",
-                            "link": 11,
-                            "label": "CLIP"
-                        }
+                        {"name": "clip", "type": "CLIP", "link": 11, "label": "CLIP"}
                     ],
                     "outputs": [
                         {
                             "name": "CONDITIONING",
                             "type": "CONDITIONING",
-                            "links": [
-                                4
-                            ],
+                            "links": [4],
                             "slot_index": 0,
-                            "label": "条件"
+                            "label": "条件",
                         }
                     ],
-                    "properties": {
-                        "Node name for S&R": "CLIPTextEncode"
-                    },
+                    "properties": {"Node name for S&R": "CLIPTextEncode"},
                     "widgets_values": [
                         "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,"
-                    ]
+                    ],
                 },
                 {
                     "id": 5,
                     "type": "EmptyLatentImage",
-                    "pos": [
-                        473,
-                        609
-                    ],
-                    "size": {
-                        "0": 315,
-                        "1": 106
-                    },
+                    "pos": [473, 609],
+                    "size": {"0": 315, "1": 106},
                     "mode": 0,
                     "outputs": [
                         {
                             "name": "LATENT",
                             "type": "LATENT",
-                            "links": [
-                                2
-                            ],
+                            "links": [2],
                             "slot_index": 0,
-                            "label": "Latent"
+                            "label": "Latent",
                         }
                     ],
-                    "properties": {
-                        "Node name for S&R": "EmptyLatentImage"
-                    },
-                    "widgets_values": [
-                        512,
-                        512,
-                        1
-                    ]
+                    "properties": {"Node name for S&R": "EmptyLatentImage"},
+                    "widgets_values": [512, 512, 1],
                 },
                 {
                     "id": 3,
                     "type": "KSampler",
-                    "pos": [
-                        863,
-                        186
-                    ],
-                    "size": {
-                        "0": 315,
-                        "1": 262
-                    },
+                    "pos": [863, 186],
+                    "size": {"0": 315, "1": 262},
                     "mode": 0,
                     "inputs": [
-                        {
-                            "name": "model",
-                            "type": "MODEL",
-                            "link": 1,
-                            "label": "模型"
-                        },
+                        {"name": "model", "type": "MODEL", "link": 1, "label": "Model"},
                         {
                             "name": "positive",
                             "type": "CONDITIONING",
                             "link": 4,
-                            "label": "正面条件"
+                            "label": "Positive",
                         },
                         {
                             "name": "negative",
                             "type": "CONDITIONING",
                             "link": 6,
-                            "label": "负面条件"
+                            "label": "Negative",
                         },
                         {
                             "name": "latent_image",
                             "type": "LATENT",
                             "link": 2,
-                            "label": "Latent"
-                        }
+                            "label": "Latent",
+                        },
                     ],
                     "outputs": [
                         {
                             "name": "LATENT",
                             "type": "LATENT",
-                            "links": [
-                                7
-                            ],
+                            "links": [7],
                             "slot_index": 0,
-                            "label": "Latent"
+                            "label": "Latent",
                         }
                     ],
-                    "properties": {
-                        "Node name for S&R": "KSampler"
-                    },
+                    "properties": {"Node name for S&R": "KSampler"},
                     "widgets_values": [
                         156680208700286,
                         "fixed",
@@ -2014,291 +2021,140 @@ classic, medieval, noble
                         8,
                         "euler",
                         "normal",
-                        1
-                    ]
+                        1,
+                    ],
                 },
                 {
                     "id": 8,
                     "type": "VAEDecode",
-                    "pos": [
-                        1209,
-                        188
-                    ],
-                    "size": {
-                        "0": 210,
-                        "1": 46
-                    },
+                    "pos": [1209, 188],
+                    "size": {"0": 210, "1": 46},
                     "mode": 0,
                     "inputs": [
                         {
                             "name": "samples",
                             "type": "LATENT",
                             "link": 7,
-                            "label": "Latent"
+                            "label": "Latent",
                         },
-                        {
-                            "name": "vae",
-                            "type": "VAE",
-                            "link": 8,
-                            "label": "VAE"
-                        }
+                        {"name": "vae", "type": "VAE", "link": 8, "label": "VAE"},
                     ],
                     "outputs": [
                         {
                             "name": "IMAGE",
                             "type": "IMAGE",
-                            "links": [
-                                9,
-                                13
-                            ],
+                            "links": [9, 13],
                             "slot_index": 0,
-                            "label": "图像"
+                            "label": "Image",
                         }
                     ],
-                    "properties": {
-                        "Node name for S&R": "VAEDecode"
-                    }
+                    "properties": {"Node name for S&R": "VAEDecode"},
                 },
                 {
                     "id": 9,
                     "type": "SaveImage",
-                    "pos": [
-                        1451,
-                        189
-                    ],
-                    "size": {
-                        "0": 210,
-                        "1": 58
-                    },
+                    "pos": [1451, 189],
+                    "size": {"0": 210, "1": 58},
                     "mode": 0,
                     "inputs": [
-                        {
-                            "name": "images",
-                            "type": "IMAGE",
-                            "link": 9,
-                            "label": "图像"
-                        }
+                        {"name": "images", "type": "IMAGE", "link": 9, "label": "Image"}
                     ],
                     "properties": {},
-                    "widgets_values": [
-                        "ComfyUI"
-                    ]
+                    "widgets_values": ["ComfyUI"],
                 },
                 {
                     "id": 4,
                     "type": "CheckpointLoaderSimple",
-                    "pos": [
-                        -348,
-                        179
-                    ],
-                    "size": {
-                        "0": 315,
-                        "1": 98
-                    },
+                    "pos": [-348, 179],
+                    "size": {"0": 315, "1": 98},
                     "mode": 0,
                     "outputs": [
                         {
                             "name": "MODEL",
                             "type": "MODEL",
-                            "links": [
-                                1
-                            ],
+                            "links": [1],
                             "slot_index": 0,
-                            "label": "模型"
+                            "label": "Model",
                         },
                         {
                             "name": "CLIP",
                             "type": "CLIP",
-                            "links": [
-                                10
-                            ],
+                            "links": [10],
                             "slot_index": 1,
-                            "label": "CLIP"
+                            "label": "CLIP",
                         },
                         {
                             "name": "VAE",
                             "type": "VAE",
-                            "links": [
-                                8
-                            ],
+                            "links": [8],
                             "slot_index": 2,
-                            "label": "VAE"
-                        }
+                            "label": "VAE",
+                        },
                     ],
-                    "properties": {
-                        "Node name for S&R": "CheckpointLoaderSimple"
-                    },
-                    "widgets_values": [
-                        "mixProV4_v4.safetensors"
-                    ]
+                    "properties": {"Node name for S&R": "CheckpointLoaderSimple"},
+                    "widgets_values": ["mixProV4_v4.safetensors"],
                 },
                 {
                     "id": 10,
                     "type": "CLIPSetLastLayer",
-                    "pos": [
-                        17,
-                        181
-                    ],
-                    "size": {
-                        "0": 315,
-                        "1": 58
-                    },
+                    "pos": [17, 181],
+                    "size": {"0": 315, "1": 58},
                     "mode": 0,
                     "inputs": [
-                        {
-                            "name": "clip",
-                            "type": "CLIP",
-                            "link": 10,
-                            "label": "CLIP"
-                        }
+                        {"name": "clip", "type": "CLIP", "link": 10, "label": "CLIP"}
                     ],
                     "outputs": [
                         {
                             "name": "CLIP",
                             "type": "CLIP",
-                            "links": [
-                                11,
-                                12
-                            ],
+                            "links": [11, 12],
                             "shape": 3,
                             "label": "CLIP",
-                            "slot_index": 0
+                            "slot_index": 0,
                         }
                     ],
-                    "properties": {
-                        "Node name for S&R": "CLIPSetLastLayer"
-                    },
-                    "widgets_values": [
-                        -1
-                    ]
+                    "properties": {"Node name for S&R": "CLIPSetLastLayer"},
+                    "widgets_values": [-1],
                 },
                 {
                     "id": 11,
                     "type": "PreviewImage",
-                    "pos": [
-                        1450,
-                        380
-                    ],
-                    "size": {
-                        "0": 210,
-                        "1": 30
-                    },
+                    "pos": [1450, 380],
+                    "size": {"0": 210, "1": 30},
                     "mode": 0,
                     "inputs": [
                         {
                             "name": "images",
                             "type": "IMAGE",
                             "link": 13,
-                            "label": "图像"
+                            "label": "Image",
                         }
                     ],
-                    "properties": {
-                        "Node name for S&R": "PreviewImage"
-                    }
+                    "properties": {"Node name for S&R": "PreviewImage"},
                 },
             ],
             "links": [
-                [
-                    1,
-                    4,
-                    0,
-                    3,
-                    0,
-                    "MODEL"
-                ],
-                [
-                    2,
-                    5,
-                    0,
-                    3,
-                    3,
-                    "LATENT"
-                ],
-                [
-                    4,
-                    6,
-                    0,
-                    3,
-                    1,
-                    "CONDITIONING"
-                ],
-                [
-                    6,
-                    7,
-                    0,
-                    3,
-                    2,
-                    "CONDITIONING"
-                ],
-                [
-                    7,
-                    3,
-                    0,
-                    8,
-                    0,
-                    "LATENT"
-                ],
-                [
-                    8,
-                    4,
-                    2,
-                    8,
-                    1,
-                    "VAE"
-                ],
-                [
-                    9,
-                    8,
-                    0,
-                    9,
-                    0,
-                    "IMAGE"
-                ],
-                [
-                    10,
-                    4,
-                    1,
-                    10,
-                    0,
-                    "CLIP"
-                ],
-                [
-                    11,
-                    10,
-                    0,
-                    6,
-                    0,
-                    "CLIP"
-                ],
-                [
-                    12,
-                    10,
-                    0,
-                    7,
-                    0,
-                    "CLIP"
-                ],
-                [
-                    13,
-                    8,
-                    0,
-                    11,
-                    0,
-                    "IMAGE"
-                ],
+                [1, 4, 0, 3, 0, "MODEL"],
+                [2, 5, 0, 3, 3, "LATENT"],
+                [4, 6, 0, 3, 1, "CONDITIONING"],
+                [6, 7, 0, 3, 2, "CONDITIONING"],
+                [7, 3, 0, 8, 0, "LATENT"],
+                [8, 4, 2, 8, 1, "VAE"],
+                [9, 8, 0, 9, 0, "IMAGE"],
+                [10, 4, 1, 10, 0, "CLIP"],
+                [11, 10, 0, 6, 0, "CLIP"],
+                [12, 10, 0, 7, 0, "CLIP"],
+                [13, 8, 0, 11, 0, "IMAGE"],
             ],
             "groups": [],
             "config": {},
             "extra": {
                 "ds": {
                     "scale": 1.2100000000000004,
-                    "offset": [
-                        253.97393794242356,
-                        53.4865032972739
-                    ]
+                    "offset": [253.97393794242356, 53.4865032972739],
                 }
             },
-            "version": 0.4
+            "version": 0.4,
         }
         return wk
 
@@ -2310,125 +2166,92 @@ classic, medieval, noble
                 {
                     "id": 4,
                     "type": "SaveImage",
-                    "pos": [
-                        1040,
-                        250
-                    ],
-                    "size": {
-                        "0": 320,
-                        "1": 60
-                    },
+                    "pos": [1040, 250],
+                    "size": {"0": 320, "1": 60},
                     "mode": 0,
                     "inputs": [
-                        {
-                            "name": "images",
-                            "type": "IMAGE",
-                            "link": 8,
-                            "label": "图像"
-                        }
+                        {"name": "images", "type": "IMAGE", "link": 8, "label": "Image"}
                     ],
-                    "properties": {
-                        "Node name for S&R": "SaveImage"
-                    },
-                    "widgets_values": [
-                        "ComfyUI"
-                    ]
+                    "properties": {"Node name for S&R": "SaveImage"},
+                    "widgets_values": ["ComfyUI"],
                 },
                 {
                     "id": 2,
                     "type": "Efficient Loader",
-                    "pos": [
-                        210,
-                        250
-                    ],
-                    "size": {
-                        "0": 400,
-                        "1": 462
-                    },
+                    "pos": [210, 250],
+                    "size": {"0": 400, "1": 462},
                     "mode": 0,
                     "inputs": [
                         {
                             "name": "lora_stack",
                             "type": "LORA_STACK",
                             "link": None,
-                            "label": "LoRA堆"
+                            "label": "LoRA Stack",
                         },
                         {
                             "name": "cnet_stack",
                             "type": "CONTROL_NET_STACK",
                             "link": None,
-                            "label": "ControlNet堆"
-                        }
+                            "label": "ControlNet Stack",
+                        },
                     ],
                     "outputs": [
                         {
                             "name": "MODEL",
                             "type": "MODEL",
-                            "links": [
-                                7
-                            ],
+                            "links": [7],
                             "shape": 3,
-                            "label": "模型",
-                            "slot_index": 0
+                            "label": "Model",
+                            "slot_index": 0,
                         },
                         {
                             "name": "CONDITIONING+",
                             "type": "CONDITIONING",
-                            "links": [
-                                3
-                            ],
+                            "links": [3],
                             "shape": 3,
-                            "label": "正面条件",
-                            "slot_index": 1
+                            "label": "Positive",
+                            "slot_index": 1,
                         },
                         {
                             "name": "CONDITIONING-",
                             "type": "CONDITIONING",
-                            "links": [
-                                4
-                            ],
+                            "links": [4],
                             "shape": 3,
-                            "label": "负面条件",
-                            "slot_index": 2
+                            "label": "Negative",
+                            "slot_index": 2,
                         },
                         {
                             "name": "LATENT",
                             "type": "LATENT",
-                            "links": [
-                                5
-                            ],
+                            "links": [5],
                             "shape": 3,
                             "label": "Latent",
-                            "slot_index": 3
+                            "slot_index": 3,
                         },
                         {
                             "name": "VAE",
                             "type": "VAE",
-                            "links": [
-                                6
-                            ],
+                            "links": [6],
                             "shape": 3,
                             "label": "VAE",
-                            "slot_index": 4
+                            "slot_index": 4,
                         },
                         {
                             "name": "CLIP",
                             "type": "CLIP",
                             "links": None,
                             "shape": 3,
-                            "label": "CLIP"
+                            "label": "CLIP",
                         },
                         {
                             "name": "DEPENDENCIES",
                             "type": "DEPENDENCIES",
                             "links": None,
                             "shape": 3,
-                            "label": "依赖"
-                        }
+                            "label": "Dependencies",
+                        },
                     ],
-                    "properties": {
-                        "Node name for S&R": "Efficient Loader"
-                    },
+                    "properties": {"Node name for S&R": "Efficient Loader"},
                     "widgets_values": [
                         "animagineXLV3_v30.safetensors",
                         "Baked VAE",
@@ -2442,61 +2265,55 @@ classic, medieval, noble
                         "A1111",
                         512,
                         512,
-                        1
+                        1,
                     ],
                     "bgcolor": "#335555",
-                    "shape": 1
+                    "shape": 1,
                 },
                 {
                     "id": 1,
                     "type": "KSampler (Efficient)",
-                    "pos": [
-                        660,
-                        250
-                    ],
-                    "size": {
-                        "0": 330,
-                        "1": 370
-                    },
+                    "pos": [660, 250],
+                    "size": {"0": 330, "1": 370},
                     "mode": 0,
                     "inputs": [
                         {
                             "name": "model",
                             "type": "MODEL",
                             "link": 7,
-                            "label": "模型",
-                            "slot_index": 0
+                            "label": "Model",
+                            "slot_index": 0,
                         },
                         {
                             "name": "positive",
                             "type": "CONDITIONING",
                             "link": 3,
-                            "label": "正面条件"
+                            "label": "Positive",
                         },
                         {
                             "name": "negative",
                             "type": "CONDITIONING",
                             "link": 4,
-                            "label": "负面条件"
+                            "label": "Negative",
                         },
                         {
                             "name": "latent_image",
                             "type": "LATENT",
                             "link": 5,
-                            "label": "Latent"
+                            "label": "Latent",
                         },
                         {
                             "name": "optional_vae",
                             "type": "VAE",
                             "link": 6,
-                            "label": "VAE(可选)"
+                            "label": "VAE (optional)",
                         },
                         {
                             "name": "script",
                             "type": "SCRIPT",
                             "link": None,
-                            "label": "脚本"
-                        }
+                            "label": "Script",
+                        },
                     ],
                     "outputs": [
                         {
@@ -2504,51 +2321,46 @@ classic, medieval, noble
                             "type": "MODEL",
                             "links": None,
                             "shape": 3,
-                            "label": "模型"
+                            "label": "Model",
                         },
                         {
                             "name": "CONDITIONING+",
                             "type": "CONDITIONING",
                             "links": None,
                             "shape": 3,
-                            "label": "正面条件"
+                            "label": "正面条件",
                         },
                         {
                             "name": "CONDITIONING-",
                             "type": "CONDITIONING",
                             "links": None,
                             "shape": 3,
-                            "label": "负面条件"
+                            "label": "负面条件",
                         },
                         {
                             "name": "LATENT",
                             "type": "LATENT",
                             "links": None,
                             "shape": 3,
-                            "label": "Latent"
+                            "label": "Latent",
                         },
                         {
                             "name": "VAE",
                             "type": "VAE",
                             "links": None,
                             "shape": 3,
-                            "label": "VAE"
+                            "label": "VAE",
                         },
                         {
                             "name": "IMAGE",
                             "type": "IMAGE",
-                            "links": [
-                                8,
-                                9
-                            ],
+                            "links": [8, 9],
                             "shape": 3,
-                            "label": "图像",
-                            "slot_index": 5
-                        }
+                            "label": "Image",
+                            "slot_index": 5,
+                        },
                     ],
-                    "properties": {
-                        "Node name for S&R": "KSampler (Efficient)"
-                    },
+                    "properties": {"Node name for S&R": "KSampler (Efficient)"},
                     "widgets_values": [
                         800315283332510,
                         "fixed",
@@ -2558,106 +2370,41 @@ classic, medieval, noble
                         "normal",
                         1,
                         "auto",
-                        "true"
+                        "true",
                     ],
                     "bgcolor": "#333355",
-                    "shape": 1
+                    "shape": 1,
                 },
                 {
                     "id": 5,
                     "type": "PreviewImage",
-                    "pos": [
-                        1050,
-                        520
-                    ],
-                    "size": {
-                        "0": 210,
-                        "1": 30
-                    },
+                    "pos": [1050, 520],
+                    "size": {"0": 210, "1": 30},
                     "mode": 0,
                     "inputs": [
-                        {
-                            "name": "images",
-                            "type": "IMAGE",
-                            "link": 9,
-                            "label": "图像"
-                        }
+                        {"name": "images", "type": "IMAGE", "link": 9, "label": "Image"}
                     ],
-                    "properties": {
-                        "Node name for S&R": "PreviewImage"
-                    }
-                }
+                    "properties": {"Node name for S&R": "PreviewImage"},
+                },
             ],
             "links": [
-                [
-                    3,
-                    2,
-                    1,
-                    1,
-                    1,
-                    "CONDITIONING"
-                ],
-                [
-                    4,
-                    2,
-                    2,
-                    1,
-                    2,
-                    "CONDITIONING"
-                ],
-                [
-                    5,
-                    2,
-                    3,
-                    1,
-                    3,
-                    "LATENT"
-                ],
-                [
-                    6,
-                    2,
-                    4,
-                    1,
-                    4,
-                    "VAE"
-                ],
-                [
-                    7,
-                    2,
-                    0,
-                    1,
-                    0,
-                    "MODEL"
-                ],
-                [
-                    8,
-                    1,
-                    5,
-                    4,
-                    0,
-                    "IMAGE"
-                ],
-                [
-                    9,
-                    1,
-                    5,
-                    5,
-                    0,
-                    "IMAGE"
-                ]
+                [3, 2, 1, 1, 1, "CONDITIONING"],
+                [4, 2, 2, 1, 2, "CONDITIONING"],
+                [5, 2, 3, 1, 3, "LATENT"],
+                [6, 2, 4, 1, 4, "VAE"],
+                [7, 2, 0, 1, 0, "MODEL"],
+                [8, 1, 5, 4, 0, "IMAGE"],
+                [9, 1, 5, 5, 0, "IMAGE"],
             ],
             "groups": [],
             "config": {},
             "extra": {
                 "ds": {
                     "scale": 1.2100000000000006,
-                    "offset": [
-                        -639.1956340693308,
-                        -38.20042379820701
-                    ]
+                    "offset": [-639.1956340693308, -38.20042379820701],
                 }
             },
-            "version": 0.4
+            "version": 0.4,
         }
         return wk
 

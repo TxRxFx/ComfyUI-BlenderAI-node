@@ -1,29 +1,33 @@
 from __future__ import annotations
-import bpy
-import os
+
 import json
 import math
+import os
 import re
 from collections.abc import Iterable
+from functools import lru_cache
 from hashlib import md5
 from math import ceil
-from typing import Set, Any
 from pathlib import Path
 from random import random as rand
-from functools import lru_cache
-from mathutils import Vector, Matrix
+from typing import Any, Set
+
+import bpy
 from bpy.types import Context, Event
-from .utils import SELECTED_COLLECTIONS, get_default_tree
-from ..utils import logger, Icon, _T, read_json, hex2rgb
+from mathutils import Matrix, Vector
+
 from ..datas import ENUM_ITEMS_CACHE, IMG_SUFFIX
 from ..timer import Timer
 from ..translations import ctxt
-from .manager import get_url, WITH_PROXY
+from ..utils import _T, Icon, hex2rgb, logger, read_json
+from .manager import WITH_PROXY, get_url
+from .utils import SELECTED_COLLECTIONS, get_default_tree
 
 try:
-    from requests import get as ______
+    pass
 except BaseException:
     from ..utils import PkgInstaller
+
     PkgInstaller.try_install("requests")
 
 NODES_POLL = {}
@@ -72,7 +76,7 @@ name2path = {
     "CLIPVisionLoader": {"clip_name": "clip_vision"},
     "unCLIPCheckpointLoader": {"ckpt_name": "checkpoints"},
     "UpscaleModelLoader": {"model_name": "upscale_models"},
-    "GLIGENLoader": {"gligen_name": "gligen"}
+    "GLIGENLoader": {"gligen_name": "gligen"},
 }
 
 name2type = {
@@ -132,9 +136,20 @@ def try_get_path_cfg():
 
 def get_icon_path(nname):
     from .blueprints import get_blueprints
-    {'controlnet': [['D:\\BaiduNetdiskDownload\\AI\\ComfyUI\\models\\controlnet',
-                    'D:\\BaiduNetdiskDownload\\AI\\ComfyUI\\models\\t2i_adapter'], ['.bin', '.safetensors', '.pth', '.pt', '.ckpt']],
-        'upscale_models': [['D:\\BaiduNetdiskDownload\\AI\\ComfyUI\\models\\upscale_models'], ['.bin', '.safetensors', '.pth', '.pt', '.ckpt']]}
+
+    {
+        "controlnet": [
+            [
+                "D:\\BaiduNetdiskDownload\\AI\\ComfyUI\\models\\controlnet",
+                "D:\\BaiduNetdiskDownload\\AI\\ComfyUI\\models\\t2i_adapter",
+            ],
+            [".bin", ".safetensors", ".pth", ".pt", ".ckpt"],
+        ],
+        "upscale_models": [
+            ["D:\\BaiduNetdiskDownload\\AI\\ComfyUI\\models\\upscale_models"],
+            [".bin", ".safetensors", ".pth", ".pt", ".ckpt"],
+        ],
+    }
 
     if not PREVICONPATH:
         if not (d := try_get_path_cfg()):
@@ -155,7 +170,8 @@ def get_icon_path(nname):
 
 
 def calc_hash_type(stype):
-    from .blueprints import is_bool_list, is_all_str_list
+    from .blueprints import is_all_str_list, is_bool_list
+
     if is_bool_list(stype):
         hash_type = md5("{True, False}".encode()).hexdigest()
     elif not is_all_str_list(stype):
@@ -207,7 +223,8 @@ class PropGen:
 
     @staticmethod
     def _find_icon_remote(nname, inp_name, item):
-        from .manager import TaskManager, RemoteServer
+        from .manager import RemoteServer, TaskManager
+
         server: RemoteServer = TaskManager.server
         mtype = name2type.get(inp_name, "")
         path: Path = server.cache_model_icon(mtype, item)
@@ -218,6 +235,7 @@ class PropGen:
     @staticmethod
     def _find_icon(nname, inp_name, item):
         from .manager import TaskManager
+
         server = TaskManager.server
         if server and server.server_type == "Remote":
             icon = PropGen._find_icon_remote(nname, inp_name, item)
@@ -230,6 +248,7 @@ class PropGen:
     @staticmethod
     def Gen(proptype, nname, inp_name, inp):
         from .blueprints import get_blueprints
+
         reg_name = get_blueprints(nname).get_prop_reg_name(inp_name)
         prop = getattr(PropGen, proptype)(nname, inp_name, reg_name, inp)
         prop = PropGen._spec_gen_properties(nname, inp_name, prop)
@@ -310,7 +329,9 @@ class PropGen:
             kwargs["default"] = items_ori.index(default)
         if tooltip := inp_params.get("tooltip"):
             kwargs["description"] = tooltip
-        prop = bpy.props.EnumProperty(items=get_items(nname, reg_name, inp_params), **kwargs)
+        prop = bpy.props.EnumProperty(
+            items=get_items(nname, reg_name, inp_params), **kwargs
+        )
 
         # 判断可哈希
         def is_all_hashable(some_list):
@@ -326,22 +347,49 @@ class PropGen:
         if len(inp) == 1:
             return bpy.props.IntProperty()
         inp[1]["max"] = min(int(inp[1].get("max", 9999999)), 2**31 - 1)
-        inp[1]["min"] = max(int(inp[1].get("min", -999999)), -2**31)
+        inp[1]["min"] = max(int(inp[1].get("min", -999999)), -(2**31))
         default = inp[1].get("default", 0)
         if not default:
             default = 0
         inp[1]["default"] = int(default)
         if inp[1]["default"] > 2**31 - 1:
-            logger.warning("Default value is too large: %s.%s -> %s", nname, inp_name, inp[1]["default"])
+            logger.warning(
+                "Default value is too large: %s.%s -> %s",
+                nname,
+                inp_name,
+                inp[1]["default"],
+            )
             inp[1]["default"] = min(inp[1]["default"], 2**31 - 1)
-        elif inp[1]["default"] < -2**31:
-            logger.warning("Default value is too small: %s.%s -> %s", nname, inp_name, inp[1]["default"])
-            inp[1]["default"] = max(inp[1]["default"], -2**31)
+        elif inp[1]["default"] < -(2**31):
+            logger.warning(
+                "Default value is too small: %s.%s -> %s",
+                nname,
+                inp_name,
+                inp[1]["default"],
+            )
+            inp[1]["default"] = max(inp[1]["default"], -(2**31))
         inp[1]["step"] = ceil(inp[1].get("step", 1))
         if inp[1].pop("display", False):
             inp[1]["subtype"] = "FACTOR"
         params = {}
-        for k in ["name", "description", "translation_context", "default", "min", "max", "soft_min", "soft_max", "step", "options", "override", "tags", "subtype", "update", "get", "set",]:
+        for k in [
+            "name",
+            "description",
+            "translation_context",
+            "default",
+            "min",
+            "max",
+            "soft_min",
+            "soft_max",
+            "step",
+            "options",
+            "override",
+            "tags",
+            "subtype",
+            "update",
+            "get",
+            "set",
+        ]:
             if k in inp[1]:
                 params[k] = inp[1][k]
         prop = bpy.props.IntProperty(**params)
@@ -349,7 +397,7 @@ class PropGen:
 
     @staticmethod
     def FLOAT(nname, inp_name, reg_name, inp):
-        {'default': 8.0, 'min': 0.0, 'max': 100.0}
+        {"default": 8.0, "min": 0.0, "max": 100.0}
         if len(inp) > 1:
             if "step" in inp[1]:
                 inp[1]["step"] = min(inp[1]["step"] * 100, 100)
@@ -361,9 +409,33 @@ class PropGen:
             if isinstance(default, (float, int)):
                 inp[1]["default"] = default
             else:
-                logger.warning("Default value is not a number: %s.%s -> %s", nname, inp_name, default)
+                logger.warning(
+                    "Default value is not a number: %s.%s -> %s",
+                    nname,
+                    inp_name,
+                    default,
+                )
             params = {}
-            for k in ["name", "description", "translation_context", "default", "min", "max", "soft_min", "soft_max", "step", "precision", "options", "override", "tags", "subtype", "unit", "update", "get", "set"]:
+            for k in [
+                "name",
+                "description",
+                "translation_context",
+                "default",
+                "min",
+                "max",
+                "soft_min",
+                "soft_max",
+                "step",
+                "precision",
+                "options",
+                "override",
+                "tags",
+                "subtype",
+                "unit",
+                "update",
+                "get",
+                "set",
+            ]:
                 if k in inp[1]:
                     params[k] = inp[1][k]
             prop = bpy.props.FloatProperty(**params)
@@ -375,7 +447,19 @@ class PropGen:
         if len(inp) <= 1:
             return bpy.props.BoolProperty()
         params = {}
-        for k in ["name", "description", "translation_context", "default", "options", "override", "tags", "subtype", "update", "get", "set"]:
+        for k in [
+            "name",
+            "description",
+            "translation_context",
+            "default",
+            "options",
+            "override",
+            "tags",
+            "subtype",
+            "update",
+            "get",
+            "set",
+        ]:
             if k not in inp[1]:
                 continue
             params[k] = inp[1][k]
@@ -384,6 +468,7 @@ class PropGen:
             if isinstance(default_value, str):
                 try:
                     from ast import literal_eval
+
                     default_value = literal_eval(default_value)
                 except Exception:
                     pass
@@ -392,7 +477,7 @@ class PropGen:
 
     @staticmethod
     def STRING(nname, inp_name, reg_name, inp):
-        {'default': 'ComfyUI', 'multiline': True}
+        {"default": "ComfyUI", "multiline": True}
         subtype = "NONE"
 
         def update_default_wrap(n):
@@ -415,6 +500,7 @@ class PropGen:
                         i.name = t
                 except Exception:
                     import traceback
+
                     traceback.print_exc()
                 stat.freeze = False
                 # if rm:
@@ -422,7 +508,9 @@ class PropGen:
                 #     if ct == self[inp_name]:
                 #         return
                 #     self[inp_name] = ct
+
             return wrap
+
         update_default = update_default_wrap(inp_name)
 
         def update_wrap(n=""):
@@ -436,6 +524,7 @@ class PropGen:
                 if not self[i_name].startswith("//"):
                     return
                 self[i_name] = bpy.path.abspath(self[i_name])
+
             return wrap
 
         update = update_wrap(inp_name)
@@ -445,14 +534,13 @@ class PropGen:
             subtype = "DIR_PATH"
         else:
             update = update_default
-        prop = bpy.props.StringProperty(default=str(inp[1].get("default", "")),
-                                        subtype=subtype,
-                                        update=update)
+        prop = bpy.props.StringProperty(
+            default=str(inp[1].get("default", "")), subtype=subtype, update=update
+        )
         return prop
 
     @staticmethod
     def _spec_gen_properties(nname, inp_name, prop):
-
         def set_sync_rand(self: NodeBase, seed):
             if not getattr(self, "sync_rand", False):
                 return
@@ -466,6 +554,7 @@ class PropGen:
                     node["noise_seed"] = seed
 
         if inp_name == "noise_seed":
+
             def setter(self, v):
                 try:
                     _ = int(v)
@@ -478,8 +567,10 @@ class PropGen:
                 if "noise_seed" not in self:
                     self["noise_seed"] = "0"
                 return str(self["noise_seed"])
+
             prop = bpy.props.StringProperty(default="0", set=setter, get=getter)
         elif inp_name == "seed":
+
             def setter(self, v):
                 try:
                     _ = int(v)
@@ -492,6 +583,7 @@ class PropGen:
                 if "seed" not in self:
                     return "0"
                 return str(self["seed"])
+
             prop = bpy.props.StringProperty(default="0", set=setter, get=getter)
         return prop
 
@@ -499,7 +591,9 @@ class PropGen:
 class SDNConfig(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty()
     visible: bpy.props.BoolProperty(default=False)
-    in_out: bpy.props.EnumProperty(items=[("INPUT", "INPUT", ""), ("OUTPUT", "OUTPUT", "")], default="INPUT")
+    in_out: bpy.props.EnumProperty(
+        items=[("INPUT", "INPUT", ""), ("OUTPUT", "OUTPUT", "")], default="INPUT"
+    )
     converted: bpy.props.BoolProperty(default=False)
 
 
@@ -525,9 +619,13 @@ class MLTText(bpy.types.PropertyGroup):
         node: NodeBase = bpy.context.active_node
         stat = self.find_stat(node)
         if stat and v in stat.texts:
+
             def pop_error(self, context):
                 self.layout.label(text="Text already exists", icon="ERROR")
-            bpy.context.window_manager.popup_menu(pop_error, title="ERROR", icon="ERROR")
+
+            bpy.context.window_manager.popup_menu(
+                pop_error, title="ERROR", icon="ERROR"
+            )
             return
         self["name"] = v
 
@@ -547,7 +645,9 @@ class MLTText(bpy.types.PropertyGroup):
             return
         setattr(node, stat.name, ct)
 
-    name: bpy.props.StringProperty(update=update_content, set=set_content, get=get_content)
+    name: bpy.props.StringProperty(
+        update=update_content, set=set_content, get=get_content
+    )
 
 
 class MLTRec(bpy.types.PropertyGroup):
@@ -566,18 +666,30 @@ class MLTRec(bpy.types.PropertyGroup):
             i = self.texts.add()
             i.name = t
         else:
+
             def pop_error(self, context):
                 self.layout.label(text="Text already exists", icon="ERROR")
-            bpy.context.window_manager.popup_menu(pop_error, title="ERROR", icon="ERROR")
+
+            bpy.context.window_manager.popup_menu(
+                pop_error, title="ERROR", icon="ERROR"
+            )
+
     addtext: bpy.props.StringProperty(name="Add Tag By Input", update=add_text_update)
 
 
 class MLTWords_UL_UIList(bpy.types.UIList):
-
-    def draw_item(self,
-                  context: bpy.types.Context,
-                  layout: bpy.types.UILayout,
-                  data, item, icon, active_data, active_property, index=0, flt_flag=0):
+    def draw_item(
+        self,
+        context: bpy.types.Context,
+        layout: bpy.types.UILayout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_property,
+        index=0,
+        flt_flag=0,
+    ):
         row = layout.row()
         # row.label(text=str(item.freq), icon="SOLO_ON")
         row.label(text=item.name)
@@ -588,14 +700,29 @@ class MLTWords_UL_UIList(bpy.types.UIList):
 
 
 class MLTText_UL_UIList(bpy.types.UIList):
-    def draw_item(self,
-                  context: bpy.types.Context,
-                  layout: bpy.types.UILayout,
-                  data, item, icon, active_data, active_property, index=0, flt_flag=0):
+    def draw_item(
+        self,
+        context: bpy.types.Context,
+        layout: bpy.types.UILayout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_property,
+        index=0,
+        flt_flag=0,
+    ):
         row = layout.row(align=True)
         row.label(text="", icon="KEYTYPE_KEYFRAME_VEC")
         if getattr(data, active_property) == index:
-            row.prop_search(item, "name", bpy.context.window_manager, "mlt_words", text="", results_are_suggestions=True)
+            row.prop_search(
+                item,
+                "name",
+                bpy.context.window_manager,
+                "mlt_words",
+                text="",
+                results_are_suggestions=True,
+            )
         else:
             row.label(text=item.name)
 
@@ -640,7 +767,11 @@ class NodeBase(bpy.types.Node):
     sync_rand: bool
 
     def get_visible_cfg(self, in_out="INPUT"):
-        return self.sdn_socket_visible_in if in_out == "INPUT" else self.sdn_socket_visible_out
+        return (
+            self.sdn_socket_visible_in
+            if in_out == "INPUT"
+            else self.sdn_socket_visible_out
+        )
 
     def set_sock_visible(self, name, in_out="INPUT", value=True):
         cfg: dict[str, SDNConfig] = self.get_visible_cfg(in_out)
@@ -704,7 +835,7 @@ class NodeBase(bpy.types.Node):
         self["OLD_APPEARANCE"] = {
             "label": self.label,
             "color": self.color[:],
-            "use_custom_color": self.use_custom_color
+            "use_custom_color": self.use_custom_color,
         }
 
     def restore_appearance(self):
@@ -727,15 +858,18 @@ class NodeBase(bpy.types.Node):
 
     def get_tree(self):
         from .tree import CFNodeTree
+
         tree: CFNodeTree = self.id_data
         return tree
 
     def get_blueprints(self):
         from .blueprints import get_blueprints
+
         return get_blueprints(self.class_type)
 
     def get_ctxt(self) -> str:
         from ..translations.translation import get_ctxt
+
         return get_ctxt(self.class_type)
 
     def query_stats(self) -> dict:
@@ -775,7 +909,7 @@ class NodeBase(bpy.types.Node):
 
     def reaches_output(self):
         """
-            判断当前节点是否最终连接到ouput_node
+        判断当前节点是否最终连接到ouput_node
         """
         if self.is_output_node():
             return True
@@ -873,6 +1007,7 @@ class NodeBase(bpy.types.Node):
 
             def f(self: NodeBase, name):
                 self.name = name
+
             Timer.put((f, self, name))
 
     def apply_unique_id(self):
@@ -891,7 +1026,10 @@ class NodeBase(bpy.types.Node):
             # 返回True 则不绘制
             if self.get_blueprints().draw_button(self, context, l, prop, swdisp=ext):
                 continue
-            if self.is_base_type(prop) and self.get_blueprints().get_prop_ori_name(prop) in self.inp_types:
+            if (
+                self.is_base_type(prop)
+                and self.get_blueprints().get_prop_ori_name(prop) in self.inp_types
+            ):
                 l = Ops_Switch_Socket_Widget.draw_prop(l, self, prop, swdisp=ext)
             l.prop(self, prop, text=prop, text_ctxt=self.get_ctxt())
 
@@ -903,7 +1041,9 @@ class NodeBase(bpy.types.Node):
     def draw_buttons_ext(self, context, layout):
         row = layout.row(align=True)
         row.label(text=self.name, icon="NODE")
-        row.prop(self, "sdn_hide", text="", icon="HIDE_ON" if self.sdn_hide else "HIDE_OFF")
+        row.prop(
+            self, "sdn_hide", text="", icon="HIDE_ON" if self.sdn_hide else "HIDE_OFF"
+        )
         self._draw_(context, layout, ext=True)
 
     def draw_label(self):
@@ -947,7 +1087,14 @@ class NodeBase(bpy.types.Node):
                 ts = l.to_socket
                 if ts.bl_idname == "*" or fs.bl_idname == "*":
                     continue
-                if fs.bl_idname == "*" and SOCKET_HASH_MAP.get(ts.bl_idname) in {"ENUM", "INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"}:
+                if fs.bl_idname == "*" and SOCKET_HASH_MAP.get(ts.bl_idname) in {
+                    "ENUM",
+                    "INT",
+                    "FLOAT",
+                    "STRING",
+                    "BOOLEAN",
+                    "COMBO",
+                }:
                     continue
                 if fs.bl_idname == ts.bl_idname:
                     continue
@@ -959,7 +1106,10 @@ class NodeBase(bpy.types.Node):
                 if not hasattr(bpy.context.space_data, "edit_tree"):
                     continue
                 # 组中的 NodeReroute的output 不删除, 但要检查是否连接的相同接口
-                if any(self.get_tree().get_in_out_node()) and l.from_node.bl_idname == "NodeReroute":
+                if (
+                    any(self.get_tree().get_in_out_node())
+                    and l.from_node.bl_idname == "NodeReroute"
+                ):
                     reroute = l.from_node
                     for l2 in reroute.outputs[0].links[:]:
                         if l2.to_node == self:
@@ -1015,8 +1165,11 @@ class NodeBase(bpy.types.Node):
                 if meta1[1][k] != meta2[1][k]:
                     return False
             return True
+
         for l in out.links:
-            if l.to_node.is_registered_node_type() and meta_equal(to_meta, l.to_node.get_meta(l.to_socket.name)):
+            if l.to_node.is_registered_node_type() and meta_equal(
+                to_meta, l.to_node.get_meta(l.to_socket.name)
+            ):
                 continue
             tree.links.remove(l)
 
@@ -1068,7 +1221,9 @@ class NodeBase(bpy.types.Node):
         bp = self.get_blueprints()
         return bp.make_serialize(self, parent=parent)
 
-    def draw_socket_io_box(self, context, layout: bpy.types.UILayout, node: NodeBase, text=""):
+    def draw_socket_io_box(
+        self, context, layout: bpy.types.UILayout, node: NodeBase, text=""
+    ):
         if not max(len(self.inputs), len(self.outputs)):
             return
         box = layout.box()
@@ -1101,7 +1256,9 @@ class NodeBase(bpy.types.Node):
             op.node_name = node.name
             op.in_out = "OUTPUT"
 
-    def draw_socket(_self, self: bpy.types.NodeSocket, context, layout, node: NodeBase, text):
+    def draw_socket(
+        _self, self: bpy.types.NodeSocket, context, layout, node: NodeBase, text
+    ):
         if not node.is_registered_node_type():
             return
         rinfo = ""
@@ -1144,7 +1301,9 @@ class Ops_Switch_Socket_Disp(bpy.types.Operator):
     socket_name: bpy.props.StringProperty()
     node_name: bpy.props.StringProperty()
     action: bpy.props.StringProperty(default="")
-    in_out: bpy.props.EnumProperty(items=[("INPUT", "INPUT", ""), ("OUTPUT", "OUTPUT", "")], default="INPUT")
+    in_out: bpy.props.EnumProperty(
+        items=[("INPUT", "INPUT", ""), ("OUTPUT", "OUTPUT", "")], default="INPUT"
+    )
 
     def switch_disp(self, node: NodeBase):
         if self.action == "Show":
@@ -1153,8 +1312,9 @@ class Ops_Switch_Socket_Disp(bpy.types.Operator):
             node.set_sock_visible(self.socket_name, self.in_out, False)
 
     def execute(self, context: Context) -> Set[int] | Set[str]:
-        from .tree import CFNodeTree
         from .nodegroup import SDNGroup
+        from .tree import CFNodeTree
+
         node: SDNGroup = get_ctx_node()
         if not node:
             return {"FINISHED"}
@@ -1212,6 +1372,7 @@ class Ops_Switch_Socket_Widget(bpy.types.Operator):
 
     def execute(self, context):
         from .tree import CFNodeTree
+
         tree: CFNodeTree = get_default_tree()
         otree = tree
         node: NodeBase = None
@@ -1238,7 +1399,9 @@ class Ops_Switch_Socket_Widget(bpy.types.Operator):
         return {"FINISHED"}
 
     @staticmethod
-    def draw_prop(layout, node: NodeBase, prop, row=True, swsock=True, swdisp=False) -> bpy.types.UILayout:
+    def draw_prop(
+        layout, node: NodeBase, prop, row=True, swsock=True, swdisp=False
+    ) -> bpy.types.UILayout:
         l = layout
         if swsock:
             l = layout.row(align=True)
@@ -1323,7 +1486,9 @@ class Ops_Link_Mask(bpy.types.Operator):
     to_node: bpy.types.Node = None
     handle: Any = None
 
-    def get_nearest_node(self, context: bpy.types.Context, filter=lambda _: True) -> bpy.types.Node:
+    def get_nearest_node(
+        self, context: bpy.types.Context, filter=lambda _: True
+    ) -> bpy.types.Node:
         mouse_pos = context.space_data.cursor_location
         for node in get_nearest_nodes(context.space_data.edit_tree.nodes, mouse_pos):
             if not filter(node[0]):
@@ -1334,7 +1499,11 @@ class Ops_Link_Mask(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         from .tree import TREE_TYPE
-        return context.space_data.type == 'NODE_EDITOR' and context.space_data.tree_type == TREE_TYPE
+
+        return (
+            context.space_data.type == "NODE_EDITOR"
+            and context.space_data.tree_type == TREE_TYPE
+        )
 
     def invoke(self, context: Context, event: Event):
         if self.action == "OnlyFocus":
@@ -1345,7 +1514,9 @@ class Ops_Link_Mask(bpy.types.Operator):
             else:
                 cam = self.create_cam()
                 to_node.cam = cam
-                bpy.ops.sdn.mask(action="add", node_name=to_node.name, cam_name=cam.name)
+                bpy.ops.sdn.mask(
+                    action="add", node_name=to_node.name, cam_name=cam.name
+                )
             self.focus_cam(cam)
             self.active_cam_gp(cam)
             self.action = ""
@@ -1357,6 +1528,7 @@ class Ops_Link_Mask(bpy.types.Operator):
 
         def prev_filter(n):
             return hasattr(n, "prev")
+
         self.from_node = self.get_nearest_node(context, filter=prev_filter)
         if not self.from_node:
             self.report({"ERROR"}, "No ImageNode Found!")
@@ -1364,6 +1536,7 @@ class Ops_Link_Mask(bpy.types.Operator):
         bpy.context.window_manager.modal_handler_add(self)
         import gpu
         import gpu_extras
+
         if bpy.app.version >= (4, 0):
             shader_color = gpu.shader.from_builtin("UNIFORM_COLOR")
         else:
@@ -1372,25 +1545,41 @@ class Ops_Link_Mask(bpy.types.Operator):
         shader_line.uniform_float("viewportSize", gpu.state.viewport_get()[2:4])
         shader_line.uniform_float("lineSmooth", True)
 
-        def draw_fill_circle(pos, r=15, col=(1.0, 1.0, 1.0, .75), resolution=32):
+        def draw_fill_circle(pos, r=15, col=(1.0, 1.0, 1.0, 0.75), resolution=32):
             fac = 2.0 * math.pi / resolution  # pre calc
-            vpos = ((pos[0], pos[1]), *((r * math.cos(i * fac) + pos[0], r * math.sin(i * fac) + pos[1]) for i in range(resolution + 1)))
+            vpos = (
+                (pos[0], pos[1]),
+                *(
+                    (r * math.cos(i * fac) + pos[0], r * math.sin(i * fac) + pos[1])
+                    for i in range(resolution + 1)
+                ),
+            )
             gpu.state.blend_set("ALPHA")
             shader_color.bind()
             shader_color.uniform_float("color", col)
-            gpu_extras.batch.batch_for_shader(shader_color, "TRI_FAN", {"pos": vpos}).draw(shader_color)
+            gpu_extras.batch.batch_for_shader(
+                shader_color, "TRI_FAN", {"pos": vpos}
+            ).draw(shader_color)
 
-        def draw_line(pos1, pos2, width=10, col1=(1.0, 1.0, 1.0, .75), col2=(1.0, 1.0, 1.0, .75)):
+        def draw_line(
+            pos1, pos2, width=10, col1=(1.0, 1.0, 1.0, 0.75), col2=(1.0, 1.0, 1.0, 0.75)
+        ):
             gpu.state.blend_set("ALPHA")
             shader_line.bind()
             shader_line.uniform_float("lineWidth", width)
             content = {"pos": (pos1, pos2), "color": (col1, col2)}
-            gpu_extras.batch.batch_for_shader(shader_line, "LINE_STRIP", content).draw(shader_line)
+            gpu_extras.batch.batch_for_shader(shader_line, "LINE_STRIP", content).draw(
+                shader_line
+            )
 
         def draw(self, context):
             if not self.from_node:
                 return
-            endpos = get_node_center(self.to_node) if self.to_node else context.space_data.cursor_location
+            endpos = (
+                get_node_center(self.to_node)
+                if self.to_node
+                else context.space_data.cursor_location
+            )
             p1 = loc_to_region2d(get_node_center(self.from_node))
             p2 = loc_to_region2d(endpos)
             draw_line(p1, p2)
@@ -1398,7 +1587,9 @@ class Ops_Link_Mask(bpy.types.Operator):
             if self.to_node:
                 draw_fill_circle(p2)
 
-        self.handle = bpy.types.SpaceNodeEditor.draw_handler_add(draw, (self, context), 'WINDOW', 'POST_PIXEL')
+        self.handle = bpy.types.SpaceNodeEditor.draw_handler_add(
+            draw, (self, context), "WINDOW", "POST_PIXEL"
+        )
         return {"RUNNING_MODAL"}
 
     def modal(self, context: Context, event: Event):
@@ -1408,8 +1599,10 @@ class Ops_Link_Mask(bpy.types.Operator):
             self.exit()
             return {"FINISHED"}
         if event.type == "MOUSEMOVE":
+
             def mask_filter(n: bpy.types.Node):
                 return n.bl_idname == "Mask"
+
             n = self.get_nearest_node(context, filter=mask_filter)
             if n != self.from_node:
                 self.to_node = n
@@ -1456,10 +1649,14 @@ class Ops_Link_Mask(bpy.types.Operator):
     def create_cam(self) -> bpy.types.Object:
         camdata = bpy.data.cameras.new("SDN_Mask_Focus")
         cam = bpy.data.objects.new(name=camdata.name, object_data=camdata)
-        cam.matrix_world = Matrix(((0.7071, -0.5, 0.5, 5.0),
-                                   (0.7071, 0.5, -0.5, -5.0),
-                                   (0, 0.7071, 0.7071, 5.0),
-                                   (0.0, 0.0, 0.0, 1.0)))
+        cam.matrix_world = Matrix(
+            (
+                (0.7071, -0.5, 0.5, 5.0),
+                (0.7071, 0.5, -0.5, -5.0),
+                (0, 0.7071, 0.7071, 5.0),
+                (0.0, 0.0, 0.0, 1.0),
+            )
+        )
         bpy.context.scene.collection.objects.link(cam)
         camdata.show_background_images = True
         return cam
@@ -1511,7 +1708,9 @@ class Ops_Link_Mask(bpy.types.Operator):
         # kmi = km.keymap_items.new(isolate_select.bl_idname, 'Q', 'PRESS')
         # addon_keymaps.append((km, kmi))
         wm = bpy.context.window_manager
-        km = wm.keyconfigs.addon.keymaps.new(name="Node Editor", space_type="NODE_EDITOR")
+        km = wm.keyconfigs.addon.keymaps.new(
+            name="Node Editor", space_type="NODE_EDITOR"
+        )
         cls.kmi = km.keymap_items.new(**cls.shotcut)
         for k, v in cls.properties.items():
             setattr(cls.kmi.properties, k, v)
@@ -1538,7 +1737,7 @@ class Set_Render_Res(bpy.types.Operator):
         bpy.context.scene.render.resolution_x = node.prev.size[0]
         bpy.context.scene.render.resolution_y = node.prev.size[1]
         bpy.context.scene.render.resolution_percentage = 100
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class GetSelCol(bpy.types.Operator):
@@ -1551,7 +1750,7 @@ class GetSelCol(bpy.types.Operator):
         for item in context.selected_ids:
             if item.bl_rna.identifier == "Collection":
                 SELECTED_COLLECTIONS.append(item.name)
-        return {'FINISHED'}
+        return {"FINISHED"}
 
 
 class AdvTextEdit(bpy.types.Operator):
@@ -1560,18 +1759,22 @@ class AdvTextEdit(bpy.types.Operator):
     bl_translation_context = ctxt
     prop: bpy.props.StringProperty(default="")
     text_name: bpy.props.StringProperty(default="")
-    action: bpy.props.EnumProperty(items=[("SwitchAdvText", "SwitchAdvText", "", 0),
-                                          ("RemoveTag", "RemoveTag", "", 1),
-                                          ("AddTag", "AddTag", "", 2),
-                                          ("UpTagWeight", "UpTagWeight", "", 3),
-                                          ("DownTagWeight", "DownTagWeight", "", 4),
-                                          ("RemoveTagWeight", "RemoveTagWeight", "", 5),
-                                          ],
-                                   default="SwitchAdvText")
+    action: bpy.props.EnumProperty(
+        items=[
+            ("SwitchAdvText", "SwitchAdvText", "", 0),
+            ("RemoveTag", "RemoveTag", "", 1),
+            ("AddTag", "AddTag", "", 2),
+            ("UpTagWeight", "UpTagWeight", "", 3),
+            ("DownTagWeight", "DownTagWeight", "", 4),
+            ("RemoveTagWeight", "RemoveTagWeight", "", 5),
+        ],
+        default="SwitchAdvText",
+    )
 
     @classmethod
-    def description(cls, context: bpy.types.Context,
-                    properties: bpy.types.OperatorProperties) -> str:
+    def description(
+        cls, context: bpy.types.Context, properties: bpy.types.OperatorProperties
+    ) -> str:
         desc = "Adv Text Action"
         if action := getattr(properties, "action", ""):
             desc = action
@@ -1580,7 +1783,11 @@ class AdvTextEdit(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         from .tree import TREE_TYPE
-        return context.space_data.type == 'NODE_EDITOR' and context.space_data.tree_type == TREE_TYPE
+
+        return (
+            context.space_data.type == "NODE_EDITOR"
+            and context.space_data.tree_type == TREE_TYPE
+        )
 
     def execute(self, context):
         node: NodeBase = get_ctx_node()
@@ -1640,7 +1847,7 @@ class AdvTextEdit(bpy.types.Operator):
                 match = re.match(r"\((.*?):(.*?)\)", t)
                 ot = t if not match else match.group(1)
                 stat.texts[self.text_name].name = ot
-        return {'FINISHED'}
+        return {"FINISHED"}
 
     def dump_list(self, node, stat):
         if not stat.enable:
@@ -1688,34 +1895,27 @@ class NodeParser:
             "input": {"required": {}},
             "output": ["*"],
             "output_is_list": [False],
-            "output_name": [
-                "Output"
-            ],
+            "output_name": ["Output"],
             "name": "PrimitiveNode",
             "display_name": "Primitive",
             "description": "",
             "category": "utils",
-            "output_node": False
+            "output_node": False,
         }
         self.object_info["Note"] = {
-            "input": {"required": {
-                "text": [
-                    "STRING",
-                    {
-                        "multiline": True
-                    }
-                ],
-            }},
+            "input": {
+                "required": {
+                    "text": ["STRING", {"multiline": True}],
+                }
+            },
             "output": ["*"],
             "output_is_list": [False],
-            "output_name": [
-                "Output"
-            ],
+            "output_name": ["Output"],
             "name": "Note",
             "display_name": "Note",
             "description": "",
             "category": "utils",
-            "output_node": False
+            "output_node": False,
         }
 
     def fetch_object(self):
@@ -1724,7 +1924,8 @@ class NodeParser:
             self.ori_object_info.update(read_json(self.INTERNAL_PATH))
         if self.PATH.exists():
             self.ori_object_info.update(read_json(self.PATH))
-        from .manager import TaskManager, FakeServer
+        from .manager import FakeServer, TaskManager
+
         if TaskManager.server != FakeServer._instance:
             self._fetch_object_from_server()
         return self.ori_object_info
@@ -1733,11 +1934,16 @@ class NodeParser:
         try:
             import requests
             from urllib3.util import Timeout
+
             timeout = Timeout(connect=0.1, read=2)
             if WITH_PROXY:
                 req = requests.get(f"{get_url()}/object_info", timeout=timeout)
             else:
-                req = requests.get(f"{get_url()}/object_info", proxies={"http": None, "https": None}, timeout=timeout)
+                req = requests.get(
+                    f"{get_url()}/object_info",
+                    proxies={"http": None, "https": None},
+                    timeout=timeout,
+                )
             if req.status_code == 200:
                 cur_object_info = req.json()
                 self.ori_object_info.update(cur_object_info)
@@ -1770,6 +1976,7 @@ class NodeParser:
             socket_clss = self._parse_sockets_clss()
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             logger.error("socket模板解析失败, 请联系开发者")
             raise Exception("socket模板解析失败") from e
@@ -1789,6 +1996,7 @@ class NodeParser:
 
     def _get_n_desc(self):
         from .blueprints import get_blueprints
+
         for name, desc in self.object_info.items():
             bp = get_blueprints(name)
             desc = bp.pre_filter(name, desc)
@@ -1816,12 +2024,14 @@ class NodeParser:
                     desc["output"][index][0] = out_name
                 desc["output"][index][1] = out_name
             _desc[name] = desc
+
         for name in list(self.object_info.keys()):
             desc = self.object_info[name]
             try:
                 _parse(name, desc, _desc)
             except Exception as e:
                 import traceback
+
                 stack = "\n" + traceback.format_exc()
                 logger.debug(stack)
                 logger.error(f"{_T('Parsing Failed')}: {name} -> {e}")
@@ -1844,7 +2054,9 @@ class NodeParser:
         return _desc
 
     def _get_socket_desc(self):
-        _desc = {"*", }  # Enum/Int/Float/String/Bool 不需要socket
+        _desc = {
+            "*",
+        }  # Enum/Int/Float/String/Bool 不需要socket
 
         def _parse(name, desc, _desc):
             for inp_channel in ["required", "optional"]:
@@ -1859,7 +2071,12 @@ class NodeParser:
                         self.SOCKET_TYPE[name][inp] = hash_type
                     else:
                         if not isinstance(inp_desc[0], str):
-                            logger.warning("socket type not str[IGNORE]: %s.%s -> %s", name, inp, inp_desc[0])
+                            logger.warning(
+                                "socket type not str[IGNORE]: %s.%s -> %s",
+                                name,
+                                inp,
+                                inp_desc[0],
+                            )
                             inp_desc[0] = str(inp_desc[0])
                         # 如果到这里仍然是空 则使用默认字符串
                         if inp_desc[0] == "":
@@ -1873,6 +2090,7 @@ class NodeParser:
                     _desc.add(out_type)
                 else:
                     _desc.add(out_type[0])
+
         for name in list(self.object_info.keys()):
             desc = self.object_info[name]
             self.SOCKET_TYPE[name] = {}
@@ -1887,7 +2105,9 @@ class NodeParser:
         socket_clss = []
         sockets = self._get_socket_desc()
         for stype in sockets:
-            if stype in {"ENUM", }:
+            if stype in {
+                "ENUM",
+            }:
                 continue
             # 过滤不安全socket
             if stype == "":
@@ -1897,7 +2117,8 @@ class NodeParser:
                 if not node.is_registered_node_type():
                     return
                 node.draw_socket(self, context, layout, node, text)
-            rand_color = (rand()**0.5, rand()**0.5, rand()**0.5, 1)
+
+            rand_color = (rand() ** 0.5, rand() ** 0.5, rand() ** 0.5, 1)
             if stype in NODE_SLOTS:
                 rand_color = Vector(hex2rgb(NODE_SLOTS[stype])).to_4d()
             color = bpy.props.FloatVectorProperty(size=4, default=rand_color)
@@ -1907,9 +2128,9 @@ class NodeParser:
                 "__annotations__": {
                     "color": color,
                     "index": bpy.props.IntProperty(default=-1),
-                    "slot_index": bpy.props.IntProperty(default=-1)
+                    "slot_index": bpy.props.IntProperty(default=-1),
                 },
-                "draw_color_simple_": rand_color
+                "draw_color_simple_": rand_color,
             }
             SocketDesc = type(stype, (SocketBase,), fields)
             socket_clss.append(SocketDesc)
@@ -1925,8 +2146,11 @@ class NodeParser:
                     "io_type": bpy.props.StringProperty(default=""),
                 },
             }
-            base = getattr(bpy.types, "NodeSocketInterface",
-                           getattr(bpy.types, "NodeTreeInterfaceSocket", None))
+            base = getattr(
+                bpy.types,
+                "NodeSocketInterface",
+                getattr(bpy.types, "NodeTreeInterfaceSocket", None),
+            )
             InterfaceDesc = type(f"{stype}Interface", (base,), fields)
             socket_clss.append(InterfaceDesc)
         return socket_clss
@@ -1945,7 +2169,9 @@ class NodeParser:
             for key, value in list(rqr_types.items()) + list(opt_types.items()):
                 inp_types[key] = value
                 if key in {"seed", "noise_seed"}:
-                    inp_types["control_after_generate"] = [["fixed", "increment", "decrement", "randomize"]]
+                    inp_types["control_after_generate"] = [
+                        ["fixed", "increment", "decrement", "randomize"]
+                    ]
 
             # inp_types.update(opt_types)
             out_types = ndesc["output"]
@@ -1972,12 +2198,18 @@ class NodeParser:
                     if socket in {"ENUM", "INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"}:
                         continue
                     # logger.warning(inp)
-                    in1 = self.inputs.new(socket, self.get_blueprints().get_prop_reg_name(inp_name))
-                    in1.display_shape = "CIRCLE" if self.is_required(inp_name) else "CIRCLE_DOT"
+                    in1 = self.inputs.new(
+                        socket, self.get_blueprints().get_prop_reg_name(inp_name)
+                    )
+                    in1.display_shape = (
+                        "CIRCLE" if self.is_required(inp_name) else "CIRCLE_DOT"
+                    )
                     # in1.link_limit = 0
                     in1.index = index
                 for index, [out_type, out_name] in enumerate(self.out_types):
-                    if out_type in {"ENUM", }:
+                    if out_type in {
+                        "ENUM",
+                    }:
                         continue
                     out = self.outputs.new(out_type, out_name)
                     out.display_shape = "CIRCLE"
@@ -1992,15 +2224,30 @@ class NodeParser:
                     return
                 if not isinstance(inp[1], dict):
                     return
-                PARAMS = {"default", "min", "max", "step", "soft_min", "soft_max", "description", "subtype", "update", "options", "multiline", "display"}
+                PARAMS = {
+                    "default",
+                    "min",
+                    "max",
+                    "step",
+                    "soft_min",
+                    "soft_max",
+                    "description",
+                    "subtype",
+                    "update",
+                    "options",
+                    "multiline",
+                    "display",
+                }
                 # 排除掉不需要的属性
                 for key in list(inp[1].keys()):
                     if key in PARAMS:
                         continue
                     inp[1].pop(key)
+
             properties = {}
             skip = False
             from .blueprints import get_blueprints
+
             bp = get_blueprints(nname)
             for inp_name, inp in inp_types.items():
                 if not inp:
@@ -2010,7 +2257,14 @@ class NodeParser:
                 if isinstance(inp[0], list):
                     proptype = "ENUM"
                 validate_inp(inp)
-                if proptype not in {"ENUM", "INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"}:
+                if proptype not in {
+                    "ENUM",
+                    "INT",
+                    "FLOAT",
+                    "STRING",
+                    "BOOLEAN",
+                    "COMBO",
+                }:
                     continue
                 try:
                     prop = PropGen.Gen(proptype, nname, inp_name, inp)
@@ -2020,7 +2274,9 @@ class NodeParser:
                     # 打印头部虚线
                     width = 80
                     try:
-                        width = os.get_terminal_size().columns - 11  # len("[SDN-ERR]: ")
+                        width = (
+                            os.get_terminal_size().columns - 11
+                        )  # len("[SDN-ERR]: ")
                     except OSError:
                         ...
                     logger.error("-" * width)
@@ -2042,7 +2298,7 @@ class NodeParser:
                 "class_type": nname,
                 "bl_label": nname,
                 "__annotations__": properties,
-                "__metadata__": ndesc
+                "__metadata__": ndesc,
             }
             if skip:
                 logger.warning("Skip Reg Node: %s", nname)
@@ -2129,14 +2385,30 @@ class Images(bpy.types.PropertyGroup):
     image: bpy.props.PointerProperty(type=bpy.types.Image)
 
 
-clss = [SDNConfig, MLTText, MLTRec, MLTWords_UL_UIList, MLTText_UL_UIList, Ops_Switch_Socket_Disp, Ops_Switch_Socket_Widget, Ops_Add_SaveImage, Set_Render_Res, GetSelCol, AdvTextEdit, Ops_Active_Tex, Ops_Link_Mask, Images]
+clss = [
+    SDNConfig,
+    MLTText,
+    MLTRec,
+    MLTWords_UL_UIList,
+    MLTText_UL_UIList,
+    Ops_Switch_Socket_Disp,
+    Ops_Switch_Socket_Widget,
+    Ops_Add_SaveImage,
+    Set_Render_Res,
+    GetSelCol,
+    AdvTextEdit,
+    Ops_Active_Tex,
+    Ops_Link_Mask,
+    Images,
+]
 
 reg, unreg = bpy.utils.register_classes_factory(clss)
 
 
 def notify_draw():
-    from .tree import CFNodeTree, TREE_TYPE
     from .node_process import display_text
+    from .tree import TREE_TYPE, CFNodeTree
+
     tree: CFNodeTree = get_default_tree()
     if not tree:
         return
@@ -2145,7 +2417,7 @@ def notify_draw():
     i, o = tree.get_in_out_node()
     if not i or not o:
         return
-    # 绘制警告信息
+    # Draw warning messages
     view2d = bpy.context.region.view2d
     if not view2d:
         return
@@ -2153,8 +2425,18 @@ def notify_draw():
     x = y = 50
     us = ui_scale()
     display_text(_T("Warning:"), (x * us, (y + 60) * us), size, (0, 1, 0.0, 1.0))
-    display_text(_T("Don't link to GroupIn/Out node"), ((x + 40) * us, (y + 30) * us), size, (0, 1, 0.0, 1.0))
-    display_text(_T("Corresponding link will auto connect after exiting the group editing"), ((x + 40) * us, y * us), size, (0, 1, 0.0, 1.0))
+    display_text(
+        _T("Don't link to GroupIn/Out node"),
+        ((x + 40) * us, (y + 30) * us),
+        size,
+        (0, 1, 0.0, 1.0),
+    )
+    display_text(
+        _T("Corresponding link will auto connect after exiting the group editing"),
+        ((x + 40) * us, y * us),
+        size,
+        (0, 1, 0.0, 1.0),
+    )
     # size = calc_size(view2d, vsize)
     # for n in [i, o]:
     #     loc = n.location.copy()
@@ -2169,7 +2451,9 @@ def notify_draw():
     # display_text(" --2-- ", pos, size * 1.5, (1, 1, 0.0, 1.0))
 
 
-handle = bpy.types.SpaceNodeEditor.draw_handler_add(notify_draw, (), 'WINDOW', 'POST_PIXEL')
+handle = bpy.types.SpaceNodeEditor.draw_handler_add(
+    notify_draw, (), "WINDOW", "POST_PIXEL"
+)
 
 
 def nodes_reg():

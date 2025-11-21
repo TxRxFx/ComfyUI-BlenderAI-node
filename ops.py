@@ -894,7 +894,7 @@ class Sync_Stencil_Image(bpy.types.Operator):
             return {"FINISHED"}
         if context.area.type != "VIEW_3D":
             return {"PASS_THROUGH"}
-        # 鼠标不在当前viewport则返回
+        # If the mouse is not in the current viewport, return
         in_area = (
             context.area.x + context.area.width > event.mouse_x > context.area.x
             and context.area.y + context.area.height > event.mouse_y > context.area.y
@@ -912,7 +912,9 @@ class Sync_Stencil_Image(bpy.types.Operator):
         length = max(area.width, area.height) * fac
 
         settings = UnifiedPaintPanel.paint_settings(context)
-        brush: bpy.types.Brush = settings.brush  # 可能报错 没brush(settings为空)
+        brush: bpy.types.Brush = (
+            settings.brush
+        )  # May raise an error: no brush (settings may be empty)
         width, height = area.width, area.height
         if not brush:
             return {"PASS_THROUGH"}

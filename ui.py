@@ -1,17 +1,37 @@
-import bpy
 import platform
+
+import bpy
 from bl_ui.properties_paint_common import UnifiedPaintPanel
 from bpy.types import Context
-from .ops import Ops, Load_History, Copy_Tree, Load_Batch, Fetch_Node_Status, Clear_Node_Cache, SDNode_To_Image, Image_To_SDNode, Image_Set_Channel_Packed, Open_Log_Window, CleanVRam
-from .translations import ctxt
-from .SDNode import TaskManager, FakeServer
-from .SDNode.tree import TREE_TYPE
+
+from .ops import (
+    CleanVRam,
+    Clear_Node_Cache,
+    Copy_Tree,
+    Fetch_Node_Status,
+    Image_Set_Channel_Packed,
+    Image_To_SDNode,
+    Load_Batch,
+    Load_History,
+    Open_Log_Window,
+    Ops,
+    SDNode_To_Image,
+)
+from .preference import AddonPreference, get_pref
+from .SDNode import FakeServer, TaskManager
 from .SDNode.nodes import NodeBase
+from .SDNode.operators import (
+    AIMatSolutionApply,
+    AIMatSolutionDel,
+    AIMatSolutionLoad,
+    AIMatSolutionRestore,
+    AIMatSolutionRun,
+    AIMatSolutionSave,
+)
 from .SDNode.rt_tracker import Tracker_Loop, is_looped
-from .SDNode.operators import AIMatSolutionLoad, AIMatSolutionRun, AIMatSolutionSave, AIMatSolutionDel, AIMatSolutionApply, AIMatSolutionRestore
-from .utils import Icon
-from .preference import get_pref, AddonPreference
-from .utils import get_addon_name, _T, get_ai_mat_tree
+from .SDNode.tree import TREE_TYPE
+from .translations import ctxt
+from .utils import _T, get_addon_name, get_ai_mat_tree
 
 
 class Panel(bpy.types.Panel):
@@ -25,42 +45,61 @@ class Panel(bpy.types.Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.space_data.type == 'NODE_EDITOR' and context.space_data.tree_type == TREE_TYPE
+        return (
+            context.space_data.type == "NODE_EDITOR"
+            and context.space_data.tree_type == TREE_TYPE
+        )
 
     def draw_header(self, context: Context):
         row = self.layout.row(align=True)
         if not hasattr(bpy.context.scene, "sdn"):
-            row.operator(Clear_Node_Cache.bl_idname, text="", icon="MODIFIER", text_ctxt=ctxt)
+            row.operator(
+                Clear_Node_Cache.bl_idname, text="", icon="MODIFIER", text_ctxt=ctxt
+            )
             return
         sdn = bpy.context.scene.sdn
-        row.prop(sdn, 'open_pref', text="", icon="PREFERENCES", text_ctxt=ctxt)
+        row.prop(sdn, "open_pref", text="", icon="PREFERENCES", text_ctxt=ctxt)
 
     def draw_header_preset(self, context: Context):
         row = self.layout.row(align=True)
         if not hasattr(bpy.context.scene, "sdn"):
-            row.operator(Clear_Node_Cache.bl_idname, text="", icon="MODIFIER", text_ctxt=ctxt)
+            row.operator(
+                Clear_Node_Cache.bl_idname, text="", icon="MODIFIER", text_ctxt=ctxt
+            )
             return
         sdn = bpy.context.scene.sdn
-        if platform.system() not in ['Linux', 'Darwin']:
+        if platform.system() not in ["Linux", "Darwin"]:
             row.operator("wm.console_toggle", text="", icon="CONSOLE", text_ctxt=ctxt)
         # row.prop(sdn, "restart_webui", text="", icon="RECOVER_LAST")
         if TaskManager.server == FakeServer._instance:
-            row.operator(Ops.bl_idname, text="", icon="QUIT", text_ctxt=ctxt).action = "Launch"
+            row.operator(
+                Ops.bl_idname, text="", icon="QUIT", text_ctxt=ctxt
+            ).action = "Launch"
         else:
             row.alert = True
-            row.operator(Ops.bl_idname, text="", icon="QUIT", text_ctxt=ctxt).action = "Close"
+            row.operator(
+                Ops.bl_idname, text="", icon="QUIT", text_ctxt=ctxt
+            ).action = "Close"
             row.alert = False
 
-        row.operator(Fetch_Node_Status.bl_idname, text="", icon="FILE_REFRESH", text_ctxt=ctxt)
-        row.operator(Ops.bl_idname, text="", icon="RECOVER_LAST", text_ctxt=ctxt).action = "Restart"
+        row.operator(
+            Fetch_Node_Status.bl_idname, text="", icon="FILE_REFRESH", text_ctxt=ctxt
+        )
+        row.operator(
+            Ops.bl_idname, text="", icon="RECOVER_LAST", text_ctxt=ctxt
+        ).action = "Restart"
         row.prop(sdn, "open_webui", text="", icon="URL", text_ctxt=ctxt)
-        row.operator(Clear_Node_Cache.bl_idname, text="", icon="BRUSH_DATA", text_ctxt=ctxt)
+        row.operator(
+            Clear_Node_Cache.bl_idname, text="", icon="BRUSH_DATA", text_ctxt=ctxt
+        )
 
     def draw(self, context: bpy.types.Context):
         layout = self.layout
         if not hasattr(bpy.context.scene, "sdn"):
             row = layout.row()
-            row.operator(Clear_Node_Cache.bl_idname, text="Clear Node Cache", icon="MODIFIER")
+            row.operator(
+                Clear_Node_Cache.bl_idname, text="Clear Node Cache", icon="MODIFIER"
+            )
             row.alert = True
             row.scale_y = 2
             return
@@ -90,9 +129,13 @@ class Panel(bpy.types.Panel):
         row1.alert = True
         row1.scale_y = 2
         if Ops.is_advanced_enable:
-            row1.operator(Ops.bl_idname, text="Stop Loop", icon="PAUSE").action = "StopLoop"
+            row1.operator(
+                Ops.bl_idname, text="Stop Loop", icon="PAUSE"
+            ).action = "StopLoop"
         else:
-            row1.operator(Ops.bl_idname, text="Execute Node Tree", icon="PLAY").action = "Submit"
+            row1.operator(
+                Ops.bl_idname, text="Execute Node Tree", icon="PLAY"
+            ).action = "Submit"
         row1.prop(bpy.context.scene.sdn, "advanced_exe", text="", icon="SETTINGS")
         row1.operator(CleanVRam.bl_idname, text="", icon="MEMORY")
         if is_looped():
@@ -104,7 +147,9 @@ class Panel(bpy.types.Panel):
         layout.operator(Tracker_Loop.bl_idname, text="", icon=icon).action = action
         if bpy.context.scene.sdn.advanced_exe:
             adv_col = col.box().column(align=True)
-            adv_col.prop(bpy.context.scene.sdn, "loop_exec", text_ctxt=ctxt, toggle=True)
+            adv_col.prop(
+                bpy.context.scene.sdn, "loop_exec", text_ctxt=ctxt, toggle=True
+            )
             if not bpy.context.scene.sdn.loop_exec:
                 adv_col.prop(bpy.context.scene.sdn, "batch_count", text_ctxt=ctxt)
 
@@ -124,39 +169,79 @@ class Panel(bpy.types.Panel):
         box = layout.box()
         row = box.row()
         row.label(text="Node Tree", text_ctxt=ctxt)
-        row.prop(bpy.context.scene.sdn, "open_presets_dir", text="", icon="FILEBROWSER", text_ctxt=ctxt)
+        row.prop(
+            bpy.context.scene.sdn,
+            "open_presets_dir",
+            text="",
+            icon="FILEBROWSER",
+            text_ctxt=ctxt,
+        )
         col = box.column(align=True)
         col.prop(bpy.context.scene.sdn, "presets_dir", text="", text_ctxt=ctxt)
-        col.template_icon_view(bpy.context.scene.sdn, "presets", show_labels=True, scale_popup=scale_popup, scale=scale_popup)
+        col.template_icon_view(
+            bpy.context.scene.sdn,
+            "presets",
+            show_labels=True,
+            scale_popup=scale_popup,
+            scale=scale_popup,
+        )
         # col.prop(bpy.context.scene.sdn, "presets", text="")
         row = col.row(align=True)
         row.operator(Ops.bl_idname, text="Save", text_ctxt=ctxt).action = "Save"
         row.operator(Ops.bl_idname, text="Delete", text_ctxt=ctxt).action = "Del"
         rrow = col.row(align=True)
-        rrow.operator(Ops.bl_idname, text="Replace Node Tree", text_ctxt=ctxt).action = "Load"
-        rrow.operator(Ops.bl_idname, text="", icon="TEXTURE", text_ctxt=ctxt).action = "PresetFromBookmark"
+        rrow.operator(
+            Ops.bl_idname, text="Replace Node Tree", text_ctxt=ctxt
+        ).action = "Load"
+        rrow.operator(
+            Ops.bl_idname, text="", icon="TEXTURE", text_ctxt=ctxt
+        ).action = "PresetFromBookmark"
         rrow.operator(Copy_Tree.bl_idname, text="", icon="COPYDOWN")
-        rrow.operator(Ops.bl_idname, text="", icon="PASTEDOWN", text_ctxt=ctxt).action = "PresetFromClipBoard"
+        rrow.operator(
+            Ops.bl_idname, text="", icon="PASTEDOWN", text_ctxt=ctxt
+        ).action = "PresetFromClipBoard"
 
         box = layout.box()
         row = box.row()
         row.label(text="Node Group", text_ctxt=ctxt)
-        row.prop(bpy.context.scene.sdn, "open_groups_dir", text="", icon="FILEBROWSER", text_ctxt=ctxt)
+        row.prop(
+            bpy.context.scene.sdn,
+            "open_groups_dir",
+            text="",
+            icon="FILEBROWSER",
+            text_ctxt=ctxt,
+        )
         col = box.column(align=True)
         col.prop(bpy.context.scene.sdn, "groups_dir", text="", text_ctxt=ctxt)
-        col.template_icon_view(bpy.context.scene.sdn, "groups", show_labels=True, scale_popup=scale_popup, scale=scale_popup)
+        col.template_icon_view(
+            bpy.context.scene.sdn,
+            "groups",
+            show_labels=True,
+            scale_popup=scale_popup,
+            scale=scale_popup,
+        )
         # col.prop(bpy.context.scene.sdn, "groups", text="")
         row = col.row(align=True)
         row.operator(Ops.bl_idname, text="Save", text_ctxt=ctxt).action = "SaveGroup"
         row.operator(Ops.bl_idname, text="Delete", text_ctxt=ctxt).action = "DelGroup"
-        col.operator(Ops.bl_idname, text="Append Node Group", text_ctxt=ctxt).action = "LoadGroup"
+        col.operator(
+            Ops.bl_idname, text="Append Node Group", text_ctxt=ctxt
+        ).action = "LoadGroup"
         sce = bpy.context.scene
         if len(sce.sdn_history_item) == 0:
             return
-        layout.template_list("HISTORY_UL_UIList", "", sce, "sdn_history_item", sce, "sdn_history_item_index")
+        layout.template_list(
+            "HISTORY_UL_UIList",
+            "",
+            sce,
+            "sdn_history_item",
+            sce,
+            "sdn_history_item_index",
+        )
 
     def show_custom(self, layout: bpy.types.UILayout):
         from .SDNode import crystools_monitor
+
         crystools_monitor.draw(layout)
 
     def show_launch_cnn(self, layout: bpy.types.UILayout):
@@ -168,8 +253,12 @@ class Panel(bpy.types.Panel):
         row = layout.row(align=True)
         row.alert = True
         row.scale_y = 2
-        row.operator(Ops.bl_idname, text="Launch/Connect to ComfyUI", icon="PLAY").action = "Launch"
-        row.prop(bpy.context.scene.sdn, "show_pref_general", text="", icon="PREFERENCES")
+        row.operator(
+            Ops.bl_idname, text="Launch/Connect to ComfyUI", icon="PLAY"
+        ).action = "Launch"
+        row.prop(
+            bpy.context.scene.sdn, "show_pref_general", text="", icon="PREFERENCES"
+        )
         if bpy.context.scene.sdn.show_pref_general:
             AddonPreference.draw_general(get_pref(), layout.box())
         self.show_error(layout)
@@ -190,6 +279,7 @@ class Panel(bpy.types.Panel):
     def show_progress(self, layout: bpy.types.UILayout):
         layout = layout.box()
         from .SDNode.custom_support import cup_monitor
+
         cup_monitor.draw(layout)
         self.show_error(layout)
         if TaskManager.get_error_msg():
@@ -210,7 +300,9 @@ def draw_header_button(self: bpy.types.Menu, context):
         layout = self.layout
         row = layout.row(align=True)
         row.alert = True
-        row.operator(Ops.bl_idname, text="", text_ctxt=ctxt, icon="PLAY").action = "Submit"
+        row.operator(
+            Ops.bl_idname, text="", text_ctxt=ctxt, icon="PLAY"
+        ).action = "Submit"
         row.operator(CleanVRam.bl_idname, text="", icon="MEMORY")
 
 
@@ -218,17 +310,39 @@ def draw_sdn_tofrom(self: bpy.types.Menu, context):
     layout = self.layout
     if context.space_data.tree_type == TREE_TYPE:
         layout.separator()
-        layout.operator(SDNode_To_Image.bl_idname, text="To Image Editor", text_ctxt=ctxt, icon="EXPORT")
-        props = layout.operator(Image_To_SDNode.bl_idname, text="From Image Editor", text_ctxt=ctxt, icon="IMPORT")
+        layout.operator(
+            SDNode_To_Image.bl_idname,
+            text="To Image Editor",
+            text_ctxt=ctxt,
+            icon="EXPORT",
+        )
+        props = layout.operator(
+            Image_To_SDNode.bl_idname,
+            text="From Image Editor",
+            text_ctxt=ctxt,
+            icon="IMPORT",
+        )
         props.force_centered = True
 
 
 def draw_imeditor_tofrom(self: bpy.types.Menu, context):
     layout = self.layout
     layout.separator()
-    layout.operator(Image_Set_Channel_Packed.bl_idname, text_ctxt=ctxt)  # , icon="MOD_MASK")
-    layout.operator(Image_To_SDNode.bl_idname, text="To ComfyUI Node Editor", text_ctxt=ctxt, icon="EXPORT")
-    layout.operator(SDNode_To_Image.bl_idname, text="From ComfyUI Node Editor", text_ctxt=ctxt, icon="IMPORT")
+    layout.operator(
+        Image_Set_Channel_Packed.bl_idname, text_ctxt=ctxt
+    )  # , icon="MOD_MASK")
+    layout.operator(
+        Image_To_SDNode.bl_idname,
+        text="To ComfyUI Node Editor",
+        text_ctxt=ctxt,
+        icon="EXPORT",
+    )
+    layout.operator(
+        SDNode_To_Image.bl_idname,
+        text="From ComfyUI Node Editor",
+        text_ctxt=ctxt,
+        icon="IMPORT",
+    )
 
 
 class HistoryItem(bpy.types.PropertyGroup):
@@ -236,11 +350,18 @@ class HistoryItem(bpy.types.PropertyGroup):
 
 
 class HISTORY_UL_UIList(bpy.types.UIList):
-
-    def draw_item(self,
-                  context: bpy.types.Context,
-                  layout: bpy.types.UILayout,
-                  data, item, icon, active_data, active_property, index=0, flt_flag=0):
+    def draw_item(
+        self,
+        context: bpy.types.Context,
+        layout: bpy.types.UILayout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_property,
+        index=0,
+        flt_flag=0,
+    ):
         row = layout.row(align=True)
         row.label(text="  " + item.name)
         row.operator(Load_History.bl_idname, text="", icon="TIME").name = item.name
@@ -258,13 +379,17 @@ class AIMatPanel(bpy.types.Panel):
 
     def draw_header_preset(self, context: Context):
         layout = self.layout
-        layout.prop(bpy.context.scene.sdn, "open_ai_sol_dir", text="", icon="FILE_FOLDER")
+        layout.prop(
+            bpy.context.scene.sdn, "open_ai_sol_dir", text="", icon="FILE_FOLDER"
+        )
 
     def draw(self, context: Context):
         layout = self.layout
         if not hasattr(bpy.context.scene, "sdn"):
             row = layout.row()
-            row.operator(Clear_Node_Cache.bl_idname, text="Clear Node Cache", icon="MODIFIER")
+            row.operator(
+                Clear_Node_Cache.bl_idname, text="Clear Node Cache", icon="MODIFIER"
+            )
             row.alert = True
             row.scale_y = 2
             return
@@ -288,10 +413,14 @@ class AIMatPanel(bpy.types.Panel):
     def show_common(self, layout: bpy.types.UILayout):
         row = layout.row(align=True)
         row.prop(bpy.context.scene.sdn, "ai_gen_solution", text="")
-        row.prop(bpy.context.scene.sdn, "clear_material_slots", text="", icon="CON_TRANSLIKE")
+        row.prop(
+            bpy.context.scene.sdn, "clear_material_slots", text="", icon="CON_TRANSLIKE"
+        )
         row.operator(AIMatSolutionSave.bl_idname, text="", icon="FILE_TICK")
         row.operator(AIMatSolutionDel.bl_idname, text="", icon="TRASH")
-        layout.template_icon_view(bpy.context.scene.sdn, "ai_gen_solution", show_labels=True, scale_popup=5)
+        layout.template_icon_view(
+            bpy.context.scene.sdn, "ai_gen_solution", show_labels=True, scale_popup=5
+        )
         row = layout.row(align=True)
         row.prop(bpy.context.scene.sdn, "ai_mat_tex_size", text="")
         row.operator(AIMatSolutionLoad.bl_idname, text_ctxt=ctxt)
@@ -302,7 +431,12 @@ class AIMatPanel(bpy.types.Panel):
         crow.operator(AIMatSolutionRun.bl_idname, text_ctxt=ctxt, icon="PLAY")
         crcol = crow.column(align=True)
         crcol.enabled = bool(get_ai_mat_tree(bpy.context.object))
-        crcol.prop(bpy.context.scene.sdn, "send_ai_tree_to_editor", text="", icon="FILE_REFRESH")
+        crcol.prop(
+            bpy.context.scene.sdn,
+            "send_ai_tree_to_editor",
+            text="",
+            icon="FILE_REFRESH",
+        )
         row = layout.row(align=True)
         if bpy.context.object and bpy.context.object.get("AI_Mat_Gen_Applied", None):
             row.alert = True
@@ -313,8 +447,12 @@ class AIMatPanel(bpy.types.Panel):
             row.label(text="", icon="RECORD_ON")
             row.label(text="", icon="RECORD_ON")
         else:
-            row.operator(AIMatSolutionApply.bl_idname, text_ctxt=ctxt, icon="EVENT_RETURN")  # KEY_RETURN_FILLED
-            row.operator(AIMatSolutionRestore.bl_idname, text_ctxt=ctxt, icon="LOOP_BACK")  # KEY_BACKSPACE_FILLED
+            row.operator(
+                AIMatSolutionApply.bl_idname, text_ctxt=ctxt, icon="EVENT_RETURN"
+            )  # KEY_RETURN_FILLED
+            row.operator(
+                AIMatSolutionRestore.bl_idname, text_ctxt=ctxt, icon="LOOP_BACK"
+            )  # KEY_BACKSPACE_FILLED
             layout.prop(bpy.context.scene.sdn, "apply_bake_pass", text="")
         self.show_progress(layout)
         # if bpy.context.object and "AI_Mat_Gen_TexID" in bpy.context.object:
@@ -330,8 +468,12 @@ class AIMatPanel(bpy.types.Panel):
         row = layout.row(align=True)
         row.alert = True
         row.scale_y = 2
-        row.operator(Ops.bl_idname, text="Launch/Connect to ComfyUI", icon="PLAY").action = "Launch"
-        row.prop(bpy.context.scene.sdn, "show_pref_general", text="", icon="PREFERENCES")
+        row.operator(
+            Ops.bl_idname, text="Launch/Connect to ComfyUI", icon="PLAY"
+        ).action = "Launch"
+        row.prop(
+            bpy.context.scene.sdn, "show_pref_general", text="", icon="PREFERENCES"
+        )
         if bpy.context.scene.sdn.show_pref_general:
             AddonPreference.draw_general(get_pref(), layout.box())
         self.show_error(layout)
@@ -345,6 +487,7 @@ class AIMatPanel(bpy.types.Panel):
     def show_progress(self, layout: bpy.types.UILayout):
         layout = layout.box()
         from .SDNode.custom_support import cup_monitor
+
         cup_monitor.draw(layout)
         self.show_error(layout)
         if TaskManager.get_error_msg():
@@ -361,7 +504,7 @@ class AIMatPanel(bpy.types.Panel):
         for node in tree.nodes:
             if len(node.label) != 3:
                 continue
-            # 判断 label 为 001 - 999 之间的字符串
+            # Check label is a string between 001 and 999
             if not node.label.isdigit() or int(node.label) < 1 or int(node.label) > 999:
                 continue
             nodes.append(node)
@@ -369,7 +512,13 @@ class AIMatPanel(bpy.types.Panel):
         for node in nodes:
             box = layout.box()
             row = box.row()
-            row.prop(node, "ac_expand", icon="TRIA_DOWN" if node.ac_expand else "TRIA_RIGHT", text="", emboss=False)
+            row.prop(
+                node,
+                "ac_expand",
+                icon="TRIA_DOWN" if node.ac_expand else "TRIA_RIGHT",
+                text="",
+                emboss=False,
+            )
             if node.type != "GROUP":
                 row.label(text=node.name)
             elif node.node_tree:
@@ -417,7 +566,7 @@ class PanelViewport(bpy.types.Panel):
         area = context.area
         # zoom to fac powf((float(M_SQRT2) + camzoom / 50.0f), 2.0f) / 4.0f;
         # max(area.width, area.height) * fac
-        fac = (2**0.5 + rv3d.view_camera_zoom / 50)**2 / 4
+        fac = (2**0.5 + rv3d.view_camera_zoom / 50) ** 2 / 4
         length = max(area.width, area.height) * fac
 
         self.layout.prop(area, "width")
@@ -429,7 +578,7 @@ class PanelViewport(bpy.types.Panel):
         self.layout.label(text=f"{fac:.6f}")
 
         settings = UnifiedPaintPanel.paint_settings(context)
-        brush = settings.brush  # 可能报错 没brush(settings为空)
+        brush = settings.brush  # May raise if there's no brush (settings may be None)
         tex_slot = brush.texture_slot
         col = self.layout.column()
         col.template_ID_preview(tex_slot, "texture", new="texture.new", rows=3, cols=8)
@@ -448,12 +597,13 @@ class PanelViewport(bpy.types.Panel):
                 coffh = coffy * height
                 hwidth = width / 2
                 hheight = height / 2
-                fac = (2**0.5 + rv3d.view_camera_zoom / 50)**2 / 4
+                fac = (2**0.5 + rv3d.view_camera_zoom / 50) ** 2 / 4
                 brush.stencil_pos = (hwidth - coffw, hheight - offset_top - coffh)
             else:
                 rv3d.view_camera_offset = (0, 0)
                 brush.stencil_pos = (width / 2, (height) / 2 - offset_top)
             brush.stencil_dimension = (length / 2, length / 2)
+
         Timer.put((f, brush, length, area.width, area.height))
 
 
@@ -461,14 +611,13 @@ def status_bar_draw(self: bpy.types.Header, context: bpy.types.Context):
     layout = self.layout
     layout.label(text="[")
     from .SDNode.custom_support import cup_monitor
+
     cup_monitor.draw(layout, use_region_width=False)
     layout.operator(Open_Log_Window.bl_idname, text="", icon="WORDWRAP_ON")
     layout.label(text="]")
 
 
-clss = (
-    AIMatPanel,
-)
+clss = (AIMatPanel,)
 
 register, unregister = bpy.utils.register_classes_factory(clss)
 

@@ -1,23 +1,25 @@
 bl_info = {
-    'name': 'ComfyUI Node Editor',
-    'author': '幻之境开发小组-会飞的键盘侠、只剩一瓶辣椒酱、a-One-Fan、DorotaLuna、hugeproblem、heredos、ra100',
-    'version': (2, 0, 0),
-    'blender': (3, 0, 0),
-    'location': '3DView->Panel',
-    'category': 'AI',
-    'doc_url': "https://shimo.im/docs/Ee32m0w80rfLp4A2"
+    "name": "ComfyUI Node Editor",
+    "author": "幻之境开发小组-会飞的键盘侠、只剩一瓶辣椒酱、a-One-Fan、DorotaLuna、hugeproblem、heredos、ra100",
+    "version": (2, 0, 0),
+    "blender": (3, 0, 0),
+    "location": "3DView->Panel",
+    "category": "AI",
+    "doc_url": "https://shimo.im/docs/Ee32m0w80rfLp4A2",
 }
 __dict__ = {}
 import time
+
 ts = time.time()
 
 
 def clear_pyc(path=None, depth=2):
-    # 递归删除 所有文件夹__pycache__
+    # Recursively remove all __pycache__ folders
     if depth == 0:
         return
     import shutil
     from pathlib import Path
+
     if path is None:
         path = Path(__file__).parent
     for f in path.iterdir():
@@ -32,25 +34,43 @@ def clear_pyc(path=None, depth=2):
 
 
 clear_pyc()
-import bpy
 import sys
-from addon_utils import disable
-from .SDNode import rtnode_reg, rtnode_unreg, TaskManager
-from .MultiLineText import EnableMLT, PasteClipboardToMLT
 
-from .utils import Icon, FSWatcher, ScopeTimer, meta_info
-from .timer import timer_reg, timer_unreg
+import bpy
+from addon_utils import disable
+
+from .hook import use_hook
+from .Linker import linker_register, linker_unregister
+from .MultiLineText import EnableMLT, PasteClipboardToMLT
+from .ops import (
+    CleanVRam,
+    Clear_Node_Cache,
+    Copy_Tree,
+    CopyToClipboard,
+    Fetch_Node_Status,
+    Image_Set_Channel_Packed,
+    Image_To_SDNode,
+    Load_Batch,
+    Load_History,
+    NodeSearch,
+    Open_Log_Window,
+    Ops,
+    Ops_Mask,
+    Popup_Load,
+    SDNode_To_Image,
+    Sync_Stencil_Image,
+)
 from .preference import pref_register, pref_unregister
-from .ops import Ops, Ops_Mask, Load_History, Popup_Load, Copy_Tree, Load_Batch, Fetch_Node_Status, Clear_Node_Cache, CopyToClipboard, Sync_Stencil_Image, NodeSearch, SDNode_To_Image, Image_To_SDNode, Image_Set_Channel_Packed, Open_Log_Window, CleanVRam
-from .ui import ui_reg, ui_unreg, Panel, HISTORY_UL_UIList, HistoryItem
+from .prop import MLTWord, Prop, RenderLayerString, prop_reg, prop_unreg
+from .SDNode import TaskManager, rtnode_reg, rtnode_unreg
+from .SDNode.custom_support import custom_support_reg, custom_support_unreg
 from .SDNode.history import History
-from .SDNode.rt_tracker import reg_tracker, unreg_tracker
 from .SDNode.nodegroup import nodegroup_reg, nodegroup_unreg
 from .SDNode.operators import ops_register, ops_unregister
-from .SDNode.custom_support import custom_support_reg, custom_support_unreg
-from .prop import RenderLayerString, MLTWord, Prop, prop_reg, prop_unreg
-from .Linker import linker_register, linker_unregister
-from .hook import use_hook
+from .SDNode.rt_tracker import reg_tracker, unreg_tracker
+from .timer import timer_reg, timer_unreg
+from .ui import HISTORY_UL_UIList, HistoryItem, Panel, ui_reg, ui_unreg
+from .utils import FSWatcher, Icon, ScopeTimer, meta_info
 
 clss = [
     Panel,
@@ -81,6 +101,7 @@ clss = [
 
 reg, unreg = bpy.utils.register_classes_factory(clss)
 from platform import system
+
 meta_info["bl_info"] = bl_info
 meta_info["package"] = __package__
 meta_info["name"] = __name__
@@ -89,13 +110,18 @@ meta_info["name"] = __name__
 def dump_info():
     import json
     import os
+
     from .preference import get_pref
+
     if "--get-blender-ai-node-info" in sys.argv:
-        model_path = getattr(get_pref(), 'model_path')
-        info = {"Version": ".".join([str(i) for i in bl_info["version"]]), "ComfyUIPath": model_path}
+        model_path = getattr(get_pref(), "model_path")
+        info = {
+            "Version": ".".join([str(i) for i in bl_info["version"]]),
+            "ComfyUIPath": model_path,
+        }
         sys.stderr.write(f"BlenderComfyUIInfo: {json.dumps(info)} BlenderComfyUIend")
         sys.stderr.flush()
-        print(f'Blender {os.getpid()} PID', file=sys.stderr)
+        print(f"Blender {os.getpid()} PID", file=sys.stderr)
 
 
 def track_ae():
@@ -135,6 +161,7 @@ def disable_reload():
             ...
         if stat in (1, 2):
             _disable(*args, **kwargs)
+
     sys.modules["addon_utils"].disable = hd
 
 
@@ -155,6 +182,7 @@ def register():
         return
 
     from .translations import translations_dict
+
     bpy.app.translations.register(__name__, translations_dict)
     reg()
     ui_reg()
@@ -164,7 +192,10 @@ def register():
     TaskManager.run_server(fake=True)
     timer_reg()
     # mlt_words注册到 sdn中会导致访问其他属性卡顿 what?
-    bpy.types.WindowManager.mlt_words = bpy.props.CollectionProperty(type=MLTWord, options={"SKIP_SAVE"})
+    # Registering mlt_words to sdn may cause lag when accessing other properties
+    bpy.types.WindowManager.mlt_words = bpy.props.CollectionProperty(
+        type=MLTWord, options={"SKIP_SAVE"}
+    )
     bpy.types.WindowManager.mlt_words_index = bpy.props.IntProperty()
     bpy.types.Scene.sdn = bpy.props.PointerProperty(type=Prop)
     bpy.types.Scene.sdn_history_item = bpy.props.CollectionProperty(type=HistoryItem)
@@ -209,6 +240,7 @@ def unregister():
 
 def modules_update():
     from .kclogger import logger
+
     logger.close()
     modules = []
     for i in sys.modules:

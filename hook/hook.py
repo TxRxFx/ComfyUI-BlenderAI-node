@@ -1,12 +1,14 @@
-import bpy
-from pathlib import Path
 from functools import partial
-from ..External.lupawrapper import get_lua_runtime, LuaRuntime
-from ..utils import _T
-from ..timer import Timer
+from pathlib import Path
+
+import bpy
+
+from ..External.lupawrapper import LuaRuntime, get_lua_runtime
+from ..kclogger import logger
 from ..Linker.linker import P
 from ..SDNode.tree import TREE_TYPE
-from ..kclogger import logger
+from ..timer import Timer
+from ..utils import _T
 
 CACHED_DPFILES: list[Path] = []
 
@@ -35,7 +37,7 @@ def get_region_by_type(area, type):
 def get_active_area(tree_type):
     bpy.ops.sdn.mouse_pos_rec("INVOKE_DEFAULT")
     mloc = P.x, P.y
-    # 获取鼠标所在的区域 如果不是 NodeEditor 则不弹窗
+    # Find the area under the mouse; if it's not a Node Editor, do not show the popup
     for area in bpy.context.screen.areas:
         if area.type != "NODE_EDITOR":
             continue
@@ -45,7 +47,7 @@ def get_active_area(tree_type):
         region = get_region_by_type(area, "WINDOW")
         w, h = region.width, region.height
         x, y = region.x, region.y
-        # 如果鼠标在区域内则弹窗
+        # If the mouse is inside this region, return the area to trigger the popup
         if x < mloc[0] < x + w and y < mloc[1] < y + h:
             return area
 
@@ -67,12 +69,13 @@ def track(rt: LuaRuntime):
     drag_file = Path(drag_file)
     if drag_file.suffix.lower() not in {".png", ".json", ".csv"}:
         return
-    logger.info(f'{_T("Find Drag file")}: {drag_file}')
+    logger.info(f"{_T('Find Drag file')}: {drag_file}")
     luahook.clear_dragfiles()
     CACHED_DPFILES.clear()
     CACHED_DPFILES.append(Path(drag_file))
 
     Timer.put(exec)
+
 
 def hook_init():
     rt = get_lua_runtime()
@@ -82,6 +85,7 @@ def hook_init():
         return
     h.set_cb(partial(track, rt))
     h.set_hook(True)
+
 
 def hook_uninit():
     rt = get_lua_runtime()

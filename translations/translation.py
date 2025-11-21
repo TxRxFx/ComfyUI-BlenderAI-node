@@ -665,8 +665,8 @@ def reg_other_translations(tdict: dict, replace_dict: dict, in_locale: str):
 
 def reg_node_ctxt(tdict: dict, replace_dict: dict, in_locale: str):
     mapped_locale = LOCALE_MAP.get(in_locale, in_locale)
-    # 处理节点注册, 每个节点提供一个ctxt
-    # 1. 查找locale
+    # Handle node registration; each node provides a context (ctxt)
+    # 1. Locate the locale directory
     p = Path(__file__).parent.joinpath(mapped_locale, "Nodes")
     if not p.exists():
         p = Path(__file__).parent.joinpath(mapped_locale.replace("_", "-"), "Nodes")
@@ -681,7 +681,7 @@ def reg_node_ctxt(tdict: dict, replace_dict: dict, in_locale: str):
         replace_dict[in_locale] = {}
     td = tdict[in_locale]
     rd = replace_dict[in_locale]
-    # 2. 注册所有Node
+    # 2. Register all nodes
     for node_name, node_translation in json_data.items():
         t_ctxt = node_name
         REG_CTXT.add(t_ctxt)
